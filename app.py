@@ -14,24 +14,13 @@ st.markdown("""
     html, body, [class*="st-"], div, p, h1, h2, h3, h4, label { color: white !important; }
     [data-testid="stSidebar"] { background-color: #002366 !important; }
     [data-testid="stSidebar"] .stTextInput input { color: #002366 !important; background-color: white !important; font-weight: bold; }
-    
-    .stButton > button {
-        background-color: #005a9c !important; color: white !important;
-        border: 1px solid white !important; width: 100%; text-transform: uppercase;
-    }
-
-    .marquee {
-        width: 100%; background-color: #d6001a; color: white; white-space: nowrap;
-        overflow: hidden; padding: 12px; font-weight: bold; border-radius: 5px;
-        margin-bottom: 15px; border: 2px solid white;
-    }
+    .stButton > button { background-color: #005a9c !important; color: white !important; border: 1px solid white !important; width: 100%; text-transform: uppercase; }
+    .marquee { width: 100%; background-color: #d6001a; color: white; white-space: nowrap; overflow: hidden; padding: 12px; font-weight: bold; border-radius: 5px; margin-bottom: 15px; border: 2px solid white; }
     .marquee span { display: inline-block; padding-left: 100%; animation: marquee 25s linear infinite; }
     @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
-
     .ba-header { background-color: #002366; padding: 20px; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
     div.stButton > button[kind="primary"] { background-color: #d6001a !important; }
     div.stButton > button[kind="secondary"] { background-color: #eb8f34 !important; }
-    
     .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 25px; border-radius: 5px; margin-top: 20px; border-top: 10px solid #d6001a; color: #002366 !important; }
     .reason-box h3, .reason-box p, .reason-box b, .reason-box small, .reason-box span, .reason-box i { color: #002366 !important; }
     </style>
@@ -39,7 +28,7 @@ st.markdown("""
 
 # 3. UTILITIES
 def calculate_dist(lat1, lon1, lat2, lon2):
-    R = 3440.065 # NM
+    R = 3440.065 # Nautical Miles
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi, dlambda = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
@@ -47,7 +36,7 @@ def calculate_dist(lat1, lon1, lat2, lon2):
 
 # 4. MASTER DATABASE (FULL 42+ STATIONS)
 base_airports = {
-    # CFE
+    # CITYFLYER (CFE)
     "LCY": {"icao": "EGLC", "lat": 51.505, "lon": 0.055, "rwy": 270, "fleet": "Cityflyer", "spec": True},
     "AMS": {"icao": "EHAM", "lat": 52.313, "lon": 4.764, "rwy": 180, "fleet": "Cityflyer", "spec": False},
     "RTM": {"icao": "EHRD", "lat": 51.957, "lon": 4.440, "rwy": 240, "fleet": "Cityflyer", "spec": False},
@@ -69,7 +58,7 @@ base_airports = {
     "IBZ": {"icao": "LEIB", "lat": 38.873, "lon": 1.373, "rwy": 60, "fleet": "Cityflyer", "spec": False},
     "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer", "spec": False},
     "FAO": {"icao": "LPFR", "lat": 37.017, "lon": -7.965, "rwy": 280, "fleet": "Cityflyer", "spec": False},
-    # EFW
+    # EUROFLYER (EFW)
     "LGW": {"icao": "EGKK", "lat": 51.148, "lon": -0.190, "rwy": 260, "fleet": "Euroflyer", "spec": False},
     "JER": {"icao": "EGJJ", "lat": 49.208, "lon": -2.195, "rwy": 260, "fleet": "Euroflyer", "spec": False},
     "OPO": {"icao": "LPPR", "lat": 41.242, "lon": -8.678, "rwy": 350, "fleet": "Euroflyer", "spec": False},
@@ -112,34 +101,40 @@ if st.sidebar.button("🔄 MANUAL DATA REFRESH"):
 map_theme = st.sidebar.radio("MAP THEME", ["Dark Mode", "Light Mode"])
 
 with st.sidebar.form("manual_add", clear_on_submit=True):
-    new_iata = st.text_input("IATA ADD").upper()
-    new_icao = st.text_input("ICAO ADD").upper()
-    if st.form_submit_button("Add to Map"):
+    new_iata = st.text_input("IATA SEARCH").upper()
+    new_icao = st.text_input("ICAO").upper()
+    if st.form_submit_button("Add Station"):
         try:
             m = Metar(new_icao); m.update()
             st.session_state.manual_stations[new_iata] = {"icao": new_icao, "lat": m.data.station.latitude, "lon": m.data.station.longitude, "rwy": 0, "fleet": "Ad-Hoc", "spec": False}
             st.cache_data.clear(); st.rerun()
         except: st.sidebar.error("Invalid ICAO")
 
-if st.session_state.manual_stations:
-    for iata in list(st.session_state.manual_stations.keys()):
-        if st.sidebar.button(f"Remove {iata}", key=f"del_{iata}"):
-            del st.session_state.manual_stations[iata]; st.cache_data.clear(); st.rerun()
-
-# 7. DATA FETCH
+# 7. DATA FETCH & PREDICTIVE LOGIC
 all_airports = {**base_airports, **st.session_state.manual_stations}
 
 @st.cache_data(ttl=900)
-def get_weather(airport_dict):
+def get_weather_intelligence(airport_dict):
     results = {}
     for iata, info in airport_dict.items():
         try:
             m = Metar(info['icao']); m.update()
             t = Taf(info['icao']); t.update()
+            
+            # Forecast Analysis (TAF Parsing)
+            f_vis, f_cig = 9999, 9999
+            if t.data:
+                for line in t.data.forecast:
+                    if line.visibility: f_vis = min(f_vis, line.visibility.value)
+                    if line.clouds:
+                        for layer in line.clouds:
+                            if layer.type in ['BKN', 'OVC'] and layer.base:
+                                f_cig = min(f_cig, layer.base * 100)
+
             results[iata] = {
                 "vis": m.data.visibility.value if m.data.visibility else 9999,
                 "ceiling": 9999, "w_dir": m.data.wind_direction.value or 0, "w_spd": m.data.wind_speed.value or 0,
-                "raw_m": m.raw, "raw_t": t.raw, "status": "online"
+                "f_vis": f_vis, "f_cig": f_cig, "raw_m": m.raw, "raw_t": t.raw, "status": "online"
             }
             if m.data.clouds:
                 for layer in m.data.clouds:
@@ -148,36 +143,34 @@ def get_weather(airport_dict):
         except: results[iata] = {"status": "offline", "raw_m": "N/A", "raw_t": "N/A"}
     return results
 
-weather_data = get_weather(all_airports)
+weather_data = get_weather_intelligence(all_airports)
 
 # 8. TACTICAL ALERT PROCESSING
 active_alerts = {}; red_list = []; green_stations = []; map_markers = []
 
 for iata, data in weather_data.items():
     info = all_airports[iata]
-    v_limit = 1500 if info['spec'] else 800
-    c_limit = 500 if info['spec'] else 200
+    v_limit, c_limit = (1500, 500) if info['spec'] else (800, 200)
     
+    # Crosswind Calculation
     xw = round(abs(data.get('w_spd', 0) * math.sin(math.radians(data.get('w_dir', 0) - info['rwy']))), 1) if info['rwy'] else 0
     
     color = "#008000"; alert_type = None; reason = ""; impact = ""
 
     if data['status'] == "offline":
         color = "#808080"
-    elif any(x in data['raw_m'] for x in ["FZRA", "FZDZ"]):
-        color = "#d6001a"; alert_type = "ICING"; reason = "Freezing Rain/Drizzle"; impact = "CRITICAL SAFETY RISK. Runway and airframe icing imminent."
     elif data['vis'] < v_limit or data['ceiling'] < c_limit:
-        color = "#d6001a"; alert_type = "MINIMA"; reason = f"Below limits: {data['vis']}m / {data['ceiling']}ft"; impact = "STATION CLOSED. Diversions required."; red_list.append(iata)
+        color = "#d6001a"; alert_type = "MINIMA"; reason = f"Currently below limits: {data['vis']}m / {data['ceiling']}ft"; impact = "STATION CLOSED. Immediate diversions required."; red_list.append(iata)
+    elif data['f_vis'] < v_limit or data['f_cig'] < c_limit:
+        color = "#d6001a"; alert_type = "FCAST-MIN"; reason = "Forecast indicates drop below minima"; impact = "Action: Review fuel and alternate availability for approaching traffic."
     elif xw > 25:
-        color = "#eb8f34"; alert_type = "X-WIND"; reason = f"Crosswind: {xw}kt"; impact = "Approach limits reached. Expect holding or go-arounds."
+        color = "#eb8f34"; alert_type = "X-WIND"; reason = f"Crosswind at {xw}kt"; impact = "Approach limits reached for most fleet. Expect go-arounds."
     elif "TSRA" in data['raw_t']:
-        color = "#eb8f34"; alert_type = "TSRA"; reason = "Thunderstorms forecast"; impact = "Convective flow restrictions. Possible holding."
+        color = "#eb8f34"; alert_type = "TSRA"; reason = "Thunderstorms forecast in TAF"; impact = "Convective flow restrictions. Possible holding required."
     elif "FG" in data['raw_m']:
-        color = "#eb8f34"; alert_type = "FOG"; reason = "Active Fog"; impact = "LVP likely in effect. Reduced landing rate."
-    elif data['vis'] < (v_limit * 2):
-        color = "#eb8f34"; alert_type = "VIS"; reason = f"Marginal Vis: {data['vis']}m"; impact = "Approaching minima. LVP preparation required."
-    elif data['ceiling'] < (c_limit * 2):
-        color = "#eb8f34"; alert_type = "CLOUDBASE"; reason = f"Low Ceiling: {data['ceiling']}ft"; impact = "Monitor trend. Crew awareness for approaches."
+        color = "#eb8f34"; alert_type = "FOG"; reason = "Active Fog observed"; impact = "LVP likely in effect. arrival rates reduced."
+    elif data['f_vis'] < (v_limit * 2):
+        color = "#eb8f34"; alert_type = "FCAST-VIS"; reason = "Forecast marginal visibility"; impact = "Monitor trend. Prepare for LVP procedures."
 
     if alert_type:
         active_alerts[iata] = {"type": alert_type, "reason": reason, "impact": impact, "metar": data['raw_m'], "taf": data['raw_t'], "color": "primary" if color == "#d6001a" else "secondary"}
@@ -187,7 +180,7 @@ for iata, data in weather_data.items():
     map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "metar": data['raw_m'], "taf": data['raw_t']})
 
 # --- UI RENDER ---
-if red_list: st.markdown(f'<div class="marquee"><span>🚨 CRITICAL: {", ".join(red_list)} BELOW MINIMA</span></div>', unsafe_allow_html=True)
+if red_list: st.markdown(f'<div class="marquee"><span>🚨 CRITICAL: {", ".join(red_list)} AT MINIMA</span></div>', unsafe_allow_html=True)
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER HUD</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 # 9. MAP RENDER
@@ -197,7 +190,7 @@ m = folium.Map(location=[45.0, 5.0], zoom_start=5, tiles=tile)
 for mkr in map_markers:
     popup_html = f"""
     <div style="width: 450px; color: black !important; font-family: monospace;">
-        <h4 style="margin:0; color:#002366; border-bottom:1px solid #002366;">{mkr['iata']} Weather Data</h4>
+        <h4 style="margin:0; color:#002366; border-bottom:1px solid #002366;">{mkr['iata']} Status</h4>
         <div style="display:flex; gap:10px; margin-top:10px;">
             <div style="flex:1; background:#f0f2f6; padding:8px; border-radius:4px;"><b>METAR</b><br><small>{mkr['metar']}</small></div>
             <div style="flex:1; background:#f0f2f6; padding:8px; border-radius:4px;"><b>TAF</b><br><small>{mkr['taf']}</small></div>
@@ -208,7 +201,7 @@ for mkr in map_markers:
 st_folium(m, width=1400, height=500, key=f"map_v{len(map_markers)}")
 
 # 10. ANALYSIS
-st.markdown("### ⚠️ Tactical Overview")
+st.markdown("### ⚠️ Strategic Operational Analysis")
 if active_alerts:
     cols = st.columns(6)
     for i, (iata, d) in enumerate(active_alerts.items()):
@@ -226,10 +219,10 @@ if st.session_state.investigate_iata in active_alerts:
 
     st.markdown(f"""
     <div class="reason-box">
-        <h3>{st.session_state.investigate_iata} Analysis: {d['type']}</h3>
-        <p><b>Weather:</b> {d['reason']}</p>
-        <p><b>Strategic Impact:</b> <i>{d['impact']}</i></p>
-        <p style="color:#d6001a !important;"><b>✈️ Diversion Planning:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
+        <h3>{st.session_state.investigate_iata} Strategy Brief: {d['type']}</h3>
+        <p><b>Weather Summary:</b> {d['reason']}</p>
+        <p><b>Impact Statement:</b> <i>{d['impact']}</i></p>
+        <p style="color:#d6001a !important; font-size:1.1em;"><b>✈️ Strategic Alternate:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
         <hr>
         <div style="display:flex; gap:20px;">
             <div><b>METAR:</b><br><small>{d['metar']}</small></div>
