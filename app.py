@@ -8,25 +8,31 @@ from datetime import datetime
 # 1. PAGE CONFIG
 st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_icon="✈️")
 
-# 2. CUSTOM OCC STYLING
+# 2. CUSTOM OCC STYLING (Forced White Fonts)
 st.markdown("""
     <style>
+    /* Global Font Color Force */
+    html, body, [class*="st-"], div, p, h1, h2, h3, h4, label {
+        color: white !important;
+    }
     .ba-header { background-color: #002366; padding: 20px; color: white; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-family: 'Arial', sans-serif; }
-    [data-testid="stSidebar"] { background-color: #002366 !important; color: white !important; }
+    [data-testid="stSidebar"] { background-color: #002366 !important; }
     span[data-baseweb="tag"] { background-color: #005a9c !important; color: white !important; }
     div[data-baseweb="select"] > div { background-color: #005a9c !important; color: white !important; border: none !important; }
-    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label { color: white !important; }
+    
+    /* Button Styles */
     div.stButton > button[kind="primary"] { background-color: #d6001a !important; color: white !important; border: none !important; width: 100%; font-weight: bold; }
     div.stButton > button[kind="secondary"] { background-color: #eb8f34 !important; color: white !important; border: none !important; width: 100%; font-weight: bold; }
-    .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 20px; border-radius: 5px; margin-top: 10px; border-top: 8px solid #002366; color: black; line-height: 1.6; }
-    .impact-stat { background-color: #f0f2f6; padding: 10px; border-radius: 5px; font-weight: bold; color: #002366; text-align: center; margin-bottom: 10px; border: 1px solid #002366; }
-    .metar-taf-container { background-color: #f9f9f9; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px; margin-top: 10px; border: 1px solid #ccc; }
+    
+    /* Analysis Box */
+    .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 20px; border-radius: 5px; margin-top: 10px; border-top: 8px solid #002366; color: #002366 !important; line-height: 1.6; }
+    .reason-box * { color: #002366 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. COMPLETE 2026 FLEET DATABASE
+# 3. COMPLETE FLEET DATABASE
 airports = {
-    # CITYFLYER (CF)
+    # --- CITYFLYER (CF) ---
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
     "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
     "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
@@ -49,7 +55,7 @@ airports = {
     "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
     "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
 
-    # EUROFLYER (EF)
+    # --- EUROFLYER (EF) ---
     "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
     "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
     "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
@@ -77,6 +83,10 @@ airports = {
     "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774},
 }
 
+def get_xwind(w_dir, w_spd, rwy):
+    if not w_dir or not w_spd: return 0
+    return round(abs(w_spd * math.sin(math.radians(w_dir - rwy))), 1)
+
 @st.cache_data(ttl=1800)
 def get_fleet_weather(airport_dict):
     results = {}
@@ -96,29 +106,18 @@ def get_fleet_weather(airport_dict):
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         ceiling = min(ceiling, layer.base * 100)
             
-            # Forecast Logic
-            f_low = False
-            if t.data.forecast:
-                for line in t.data.forecast[:2]:
-                    f_vis = line.visibility.value if line.visibility else 9999
-                    if f_vis < 1500: f_low = True
-
             results[iata] = {
                 "temp": temp, "vis": vis, "w_dir": w_dir, "w_spd": w_spd,
-                "ceiling": ceiling, "raw_metar": m.raw, "raw_taf": t.raw, "f_low": f_low
+                "ceiling": ceiling, "raw_metar": m.raw, "raw_taf": t.raw
             }
         except: continue
     return results
 
-def get_xwind(w_dir, w_spd, rwy):
-    if not w_dir or not w_spd: return 0
-    return round(abs(w_spd * math.sin(math.radians(w_dir - rwy))), 1)
-
 # LOAD DATA
 weather_data = get_fleet_weather(airports)
 
-# 5. SIDEBAR
-st.sidebar.markdown("### Airport Search")
+# SIDEBAR & SEARCH
+st.sidebar.markdown("### 🔍 Airport Search")
 search_iata = st.sidebar.text_input("Enter IATA Code", "").upper()
 st.sidebar.markdown("---")
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
@@ -128,7 +127,7 @@ tile_style = "CartoDB positron" if map_theme == "Light Mode" else "CartoDB dark_
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# 6. PROCESSING
+# PROCESS ALERTS
 active_alerts = {}
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 map_markers = []
@@ -145,17 +144,16 @@ for iata, data in weather_data.items():
         elif xw > 18 or data['vis'] < 1500 or data['ceiling'] < 500:
             color = "#eb8f34"; alert_type = "amber"
         
-        if iata == "IVL" and data['temp'] <= -25:
-            color = "#005a9c"; alert_type = "arctic"
+        if iata == "IVL" and data['temp'] <= -25: color = "#005a9c"; alert_type = "arctic"
 
         if alert_type:
-            active_alerts[iata] = {"type": alert_type, "vis": data['vis'], "ceiling": data['ceiling'], "xw": xw, "f_low": data['f_low'], "metar": data['raw_metar'], "taf": data['raw_taf']}
+            active_alerts[iata] = {"type": alert_type, "vis": data['vis'], "ceiling": data['ceiling'], "xw": xw, "metar": data['raw_metar'], "taf": data['raw_taf']}
             counts[info['fleet']]["red" if alert_type=="red" else "orange"] += 1
         else:
             counts[info['fleet']]["green"] += 1
-        map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "raw": data['raw_metar']})
+        map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "metar": data['raw_metar'], "taf": data['raw_taf']})
 
-# 7. UI RENDER
+# UI RENDER
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 c1, c2 = st.columns(2)
@@ -174,18 +172,34 @@ with m_col:
     
     m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
     for mkr in map_markers:
+        # LANDSCAPE POPUP HTML
+        popup_html = f"""
+        <div style="width: 500px; font-family: sans-serif; padding: 10px;">
+            <h4 style="margin: 0 0 10px 0; color: #002366; border-bottom: 2px solid #002366;">{mkr['iata']} Weather Detail</h4>
+            <div style="display: flex; gap: 15px;">
+                <div style="flex: 1; background: #f0f2f6; padding: 8px; border-radius: 4px;">
+                    <b style="color: #002366;">CURRENT (METAR)</b><br>
+                    <code style="font-size: 11px; color: #333;">{mkr['metar']}</code>
+                </div>
+                <div style="flex: 1; background: #e8f0fe; padding: 8px; border-radius: 4px;">
+                    <b style="color: #002366;">FORECAST (TAF)</b><br>
+                    <code style="font-size: 11px; color: #333;">{mkr['taf']}</code>
+                </div>
+            </div>
+        </div>
+        """
         folium.CircleMarker(
             location=[mkr['lat'], mkr['lon']],
             radius=12 if mkr['iata'] == st.session_state.investigate_iata else 7,
             color=mkr['color'], fill=True, fill_opacity=0.9,
-            popup=f"<b>{mkr['iata']}</b><br>{mkr['raw']}"
+            popup=folium.Popup(popup_html, max_width=550)
         ).add_to(m)
-    st_folium(m, width=1000, height=700, key="occ_map_v2")
+    st_folium(m, width=1000, height=700, key="occ_map_final")
 
 with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
     for iata, d in active_alerts.items():
-        if st.button(f"{iata}: Investigating Issues", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
+        if st.button(f"{iata}: Critical Issue Identified", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
             st.session_state.investigate_iata = iata
             st.rerun()
     
@@ -193,13 +207,12 @@ with a_col:
         d = active_alerts[st.session_state.investigate_iata]
         st.markdown(f"""
         <div class="reason-box">
-            <h3 style="margin:0; color:#002366;">{st.session_state.investigate_iata} Analysis</h3>
-            <div class="impact-stat">Potential disruption to BA/CFE/EFW arrivals</div>
-            <p><b>Impact:</b> Visibility {d['vis']}m, Ceiling {d['ceiling']}ft, XW {d['xw']}kt.</p>
-            <p><b>Outlook:</b> Weather is {"forecast to persist below minima." if d['f_low'] else "expected to improve."} This may cause diversions.</p>
-            <div class="metar-taf-container"><b>METAR:</b><br>{d['metar']}<br><br><b>TAF:</b><br>{d['taf']}</div>
+            <h4 style="margin:0;">{st.session_state.investigate_iata} Analysis</h4>
+            <p>Conditions: Vis {d['vis']}m, Ceiling {d['ceiling']}ft, XW {d['xw']}kt.</p>
+            <p><b>Impact:</b> This may cause holding or diversions for BA/CFE/EFW arrivals.</p>
+            <hr>
+            <small><b>TAF Extract:</b><br>{d['taf']}</small>
         </div>
         """, unsafe_allow_html=True)
         if st.button("Close Analysis"):
-            st.session_state.investigate_iata = "None"
-            st.rerun()
+            st.session_state.investigate_iata = "None"; st.rerun()
