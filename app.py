@@ -17,7 +17,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-2. DATABASE (IATA Keys)
+# 2. FULL 2026 FLEET DATABASE
 airports = {
     # --- CITYFLYER ---
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
@@ -103,7 +103,11 @@ op_notes = st.sidebar.text_area("Operational Notes", "Normal Ops.")
 map_theme = st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"])
 tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 
-m = folium.Map(location=[48.0, 5.0], zoom_start=4, tiles=tile_style)
+map_center = [48.0, 5.0]; zoom = 4
+if search_iata != "Select...":
+    map_center = [airports[search_iata]["lat"], airports[search_iata]["lon"]]; zoom = 10
+
+m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 alerts = []
 
@@ -114,7 +118,6 @@ for iata, info in airports.items():
             metar = Metar(info['icao']); metar.update()
             taf = Taf(info['icao']); taf.update()
             
-            # 1. Extraction
             temp = metar.data.temperature.value if metar.data.temperature else 0
             vis = metar.data.visibility.value if metar.data.visibility else 9999
             w_dir = metar.data.wind_direction.value if metar.data.wind_direction else 0
@@ -122,14 +125,12 @@ for iata, info in airports.items():
             xw = get_xwind(w_dir, w_spd, info['rwy'])
             raw_metar = metar.raw
             
-            # 2. Ceiling
             ceiling = 9999
             if metar.data.clouds:
                 for layer in metar.data.clouds:
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         ceiling = min(ceiling, layer.base * 100)
 
-            # 3. Trends & De-Ice Logic
             trend_warnings = check_taf_trends(taf)
             deice_codes = ["SN", "FZ", "IC", "PL", "SG", "GR"]
             is_deice = any(code in raw_metar for code in deice_codes)
@@ -156,7 +157,7 @@ for iata, info in airports.items():
                 counts[info['fleet']]["green"] += 1
 
             popup_html = f"""
-            <div style="width: 400px; font-family: Arial; padding: 10px;">
+            <div style="width: 450px; font-family: Arial; padding: 10px; background-color: white;">
                 <h3 style="color: #002366; border-bottom: 2px solid #002366;">{info['name']} ({iata})</h3>
                 <b>Conditions:</b> {temp}°C | XW {xw}kt | CIG {ceiling}ft<br>
                 <div style="margin-top:10px; padding:8px; background:#f0f0f0; font-family:monospace; font-size:11px;">
@@ -164,14 +165,17 @@ for iata, info in airports.items():
                 </div>
             </div>"""
             
-            folium.CircleMarker(location=[info['lat'], info['lon']], radius=8, 
+            # Dynamic circle sizing based on zoom level
+            radius = 6 if zoom < 6 else 14
+            
+            folium.CircleMarker(location=[info['lat'], info['lon']], radius=radius, 
                                 color=color, fill=True, fill_opacity=0.9,
                                 popup=folium.Popup(popup_html, max_width=450)).add_to(m)
         except: continue
 
 # DISPLAY UI
 m1, m2 = st.columns([3.5, 1])
-with m1: st_folium(m, width=1100, height=750, key="occ_v_deice")
+with m1: st_folium(m, width=1100, height=750, key="occ_v_final")
 with m2:
     st.markdown("#### ⚠️ Operational Alerts")
     for a in alerts:
