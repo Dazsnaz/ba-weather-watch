@@ -51,7 +51,7 @@ st.markdown("""
 
 # 3. UTILITIES
 def calculate_dist(lat1, lon1, lat2, lon2):
-    R = 3440.065 
+    R = 3440.065 # Nautical Miles
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi, dlambda = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
@@ -61,24 +61,59 @@ def calculate_dist(lat1, lon1, lat2, lon2):
 if 'manual_stations' not in st.session_state:
     st.session_state.manual_stations = {}
 
-# --- MASTER FLEET DATABASE ---
+# --- MASTER FLEET DATABASE (Full 42 Stations) ---
 base_airports = {
+    # CITYFLYER (CFE)
     "LCY": {"icao": "EGLC", "lat": 51.505, "lon": 0.055, "rwy": 270, "fleet": "Cityflyer"},
-    "LGW": {"icao": "EGKK", "lat": 51.148, "lon": -0.190, "rwy": 260, "fleet": "Euroflyer"},
     "AMS": {"icao": "EHAM", "lat": 52.313, "lon": 4.764, "rwy": 180, "fleet": "Cityflyer"},
     "RTM": {"icao": "EHRD", "lat": 51.957, "lon": 4.440, "rwy": 240, "fleet": "Cityflyer"},
     "DUB": {"icao": "EIDW", "lat": 53.421, "lon": -6.270, "rwy": 280, "fleet": "Cityflyer"},
     "GLA": {"icao": "EGPF", "lat": 55.871, "lon": -4.433, "rwy": 230, "fleet": "Cityflyer"},
     "EDI": {"icao": "EGPH", "lat": 55.950, "lon": -3.363, "rwy": 240, "fleet": "Cityflyer"},
     "BHD": {"icao": "EGAC", "lat": 54.618, "lon": -5.872, "rwy": 220, "fleet": "Cityflyer"},
+    "STN": {"icao": "EGSS", "lat": 51.885, "lon": 0.235, "rwy": 220, "fleet": "Cityflyer"},
+    "SEN": {"icao": "EGMC", "lat": 51.571, "lon": 0.701, "rwy": 230, "fleet": "Cityflyer"},
+    "FLR": {"icao": "LIRQ", "lat": 43.810, "lon": 11.205, "rwy": 50, "fleet": "Cityflyer"},
+    "AGP": {"icao": "LEMG", "lat": 36.675, "lon": -4.499, "rwy": 130, "fleet": "Cityflyer"},
+    "BER": {"icao": "EDDB", "lat": 52.362, "lon": 13.501, "rwy": 250, "fleet": "Cityflyer"},
+    "FRA": {"icao": "EDDF", "lat": 50.033, "lon": 8.571, "rwy": 250, "fleet": "Cityflyer"},
+    "LIN": {"icao": "LIML", "lat": 45.445, "lon": 9.277, "rwy": 360, "fleet": "Cityflyer"},
+    "CMF": {"icao": "LFLB", "lat": 45.638, "lon": 5.880, "rwy": 180, "fleet": "Cityflyer"},
+    "GVA": {"icao": "LSGG", "lat": 46.237, "lon": 6.109, "rwy": 220, "fleet": "Cityflyer"},
+    "ZRH": {"icao": "LSZH", "lat": 47.458, "lon": 8.548, "rwy": 160, "fleet": "Cityflyer"},
+    "MAD": {"icao": "LEMD", "lat": 40.494, "lon": -3.567, "rwy": 140, "fleet": "Cityflyer"},
+    "IBZ": {"icao": "LEIB", "lat": 38.873, "lon": 1.373, "rwy": 60, "fleet": "Cityflyer"},
+    "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer"},
+    "FAO": {"icao": "LPFR", "lat": 37.017, "lon": -7.965, "rwy": 280, "fleet": "Cityflyer"},
+    # EUROFLYER
+    "LGW": {"icao": "EGKK", "lat": 51.148, "lon": -0.190, "rwy": 260, "fleet": "Euroflyer"},
     "JER": {"icao": "EGJJ", "lat": 49.208, "lon": -2.195, "rwy": 260, "fleet": "Euroflyer"},
+    "OPO": {"icao": "LPPR", "lat": 41.242, "lon": -8.678, "rwy": 350, "fleet": "Euroflyer"},
+    "LYS": {"icao": "LFLL", "lat": 45.726, "lon": 5.090, "rwy": 350, "fleet": "Euroflyer"},
     "INN": {"icao": "LOWI", "lat": 47.260, "lon": 11.344, "rwy": 260, "fleet": "Euroflyer"},
     "SZG": {"icao": "LOWS", "lat": 47.794, "lon": 13.004, "rwy": 330, "fleet": "Euroflyer"},
+    "BOD": {"icao": "LFBD", "lat": 44.828, "lon": -0.716, "rwy": 230, "fleet": "Euroflyer"},
+    "GNB": {"icao": "LFLS", "lat": 45.363, "lon": 5.330, "rwy": 90, "fleet": "Euroflyer"},
     "NCE": {"icao": "LFMN", "lat": 43.665, "lon": 7.215, "rwy": 40, "fleet": "Euroflyer"},
-    "FNC": {"icao": "LPMA", "lat": 32.694, "lon": -16.774, "rwy": 50, "fleet": "Euroflyer"}
+    "TRN": {"icao": "LIMF", "lat": 45.202, "lon": 7.649, "rwy": 360, "fleet": "Euroflyer"},
+    "VRN": {"icao": "LIPX", "lat": 45.396, "lon": 10.888, "rwy": 40, "fleet": "Euroflyer"},
+    "ALC": {"icao": "LEAL", "lat": 38.282, "lon": -0.558, "rwy": 100, "fleet": "Euroflyer"},
+    "SVQ": {"icao": "LEZL", "lat": 37.418, "lon": -5.893, "rwy": 270, "fleet": "Euroflyer"},
+    "RAK": {"icao": "GMMX", "lat": 31.606, "lon": -8.036, "rwy": 100, "fleet": "Euroflyer"},
+    "AGA": {"icao": "GMAD", "lat": 30.325, "lon": -9.413, "rwy": 90, "fleet": "Euroflyer"},
+    "SSH": {"icao": "HESH", "lat": 27.977, "lon": 34.394, "rwy": 40, "fleet": "Euroflyer"},
+    "PFO": {"icao": "LCPH", "lat": 34.718, "lon": 32.486, "rwy": 290, "fleet": "Euroflyer"},
+    "LCA": {"icao": "LCLK", "lat": 34.875, "lon": 33.625, "rwy": 220, "fleet": "Euroflyer"},
+    "FUE": {"icao": "GCLP", "lat": 28.452, "lon": -13.864, "rwy": 10, "fleet": "Euroflyer"},
+    "TFS": {"icao": "GCTS", "lat": 28.044, "lon": -16.572, "rwy": 70, "fleet": "Euroflyer"},
+    "ACE": {"icao": "GCRR", "lat": 28.945, "lon": -13.605, "rwy": 30, "fleet": "Euroflyer"},
+    "LPA": {"icao": "GCLP", "lat": 27.931, "lon": -15.386, "rwy": 30, "fleet": "Euroflyer"},
+    "IVL": {"icao": "EFIV", "lat": 68.607, "lon": 27.405, "rwy": 40, "fleet": "Euroflyer"},
+    "MLA": {"icao": "LMML", "lat": 35.857, "lon": 14.477, "rwy": 310, "fleet": "Euroflyer"},
+    "FNC": {"icao": "LPMA", "lat": 32.694, "lon": -16.774, "rwy": 50, "fleet": "Euroflyer"},
 }
 
-# 5. SIDEBAR: MANUAL ADD FORM
+# 5. SIDEBAR: AD-HOC MANAGEMENT
 st.sidebar.markdown("### ➕ Manual Station Add")
 with st.sidebar.form("manual_add", clear_on_submit=True):
     new_iata = st.text_input("IATA (e.g. CDG)").upper()
@@ -91,7 +126,7 @@ with st.sidebar.form("manual_add", clear_on_submit=True):
                 "icao": new_icao, "lat": m.data.station.latitude, 
                 "lon": m.data.station.longitude, "rwy": 0, "fleet": "Ad-Hoc"
             }
-            st.cache_data.clear() # Force refresh to include new station
+            st.cache_data.clear() 
             st.rerun()
         except: st.sidebar.error("Invalid ICAO/Connection Error")
 
@@ -103,7 +138,7 @@ if st.session_state.manual_stations:
             st.cache_data.clear()
             st.rerun()
 
-# 6. DATA FETCH
+# 6. DATA GATHERING
 airports = {**base_airports, **st.session_state.manual_stations}
 
 @st.cache_data(ttl=1800)
@@ -142,7 +177,7 @@ fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer",
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# 7. PROCESSING
+# 7. PROCESSING ALERTS
 active_alerts = {}; green_stations = []; red_airports = []; map_markers = []
 for iata, data in weather_data.items():
     info = airports[iata]
@@ -165,7 +200,7 @@ for iata, data in weather_data.items():
         else: green_stations.append(iata)
         map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "metar": data['raw_metar'], "taf": data['raw_taf']})
 
-# --- UI RENDER ---
+# 8. UI RENDER
 if len(red_airports) >= 3:
     st.markdown(f'<div class="marquee"><span>🚨 NETWORK ADVISORY: Red Alerts at {", ".join(red_airports)}</span></div>', unsafe_allow_html=True)
 
@@ -183,7 +218,7 @@ for mkr in map_markers:
     folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=mkr['metar']).add_to(m)
 st_folium(m, width=1400, height=500, key="occ_map")
 
-# 8. ALERTS & ANALYSIS
+# ALERTS & ANALYSIS
 st.markdown("### ⚠️ Operational Alerts")
 if active_alerts:
     cols = st.columns(6)
@@ -191,8 +226,6 @@ if active_alerts:
         with cols[idx % 6]:
             if st.button(f"{iata}: {d['reason']}", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
                 st.session_state.investigate_iata = iata; st.rerun()
-
-
 
 if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
