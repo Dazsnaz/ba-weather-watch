@@ -5,8 +5,46 @@ from avwx import Metar, Taf
 import math
 from datetime import datetime
 
-# 1. PAGE CONFIG & AUTO-REFRESH
-st.set_page_config(layout="wide", page_title="BA Fleet Weather 2026", page_icon="✈️")
+# 1. PAGE CONFIG & BRANDING
+st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_icon="✈️")
+
+# Custom CSS for BA OCC Branding
+st.markdown("""
+    <style>
+    .main { background-color: #f5f5f5; }
+    .stHeader { background-color: #002366; }
+    /* BA Navy Header */
+    .ba-header {
+        background-color: #002366;
+        padding: 20px;
+        color: white;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    /* Alert Cards */
+    .alert-card-red {
+        background-color: #d6001a;
+        color: white;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        border-left: 8px solid #8b0000;
+    }
+    .alert-card-amber {
+        background-color: #eb8f34;
+        color: white;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        border-left: 8px solid #c46210;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Auto-refresh
 st.markdown('<meta http-equiv="refresh" content="1800">', unsafe_allow_html=True)
 
 # 2. DEFINED FLEET DATABASE
@@ -67,33 +105,42 @@ def get_xwind(w_dir, w_spd, rwy):
     if not w_dir or not w_spd: return 0
     return round(abs(w_spd * math.sin(math.radians(w_dir - rwy))), 1)
 
+# --- HEADER SECTION ---
+st.markdown(f"""
+    <div class="ba-header">
+        <div style="font-size: 28px; font-weight: bold;">British Airways | OCC Weather Dashboard</div>
+        <div style="text-align: right;">
+            <span style="font-size: 14px;">{datetime.now().strftime('%d %b - %H:%M')} UTC</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # Sidebar
+st.sidebar.image("https://www.britishairways.com/content/dam/paris/ba-logo.png", width=200)
 st.sidebar.title("Fleet Controls")
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
+search_iata = st.sidebar.selectbox("Jump to Airport (IATA)", ["Select..."] + sorted([k for k, v in airports.items() if v['fleet'] in fleet_filter]))
+st.sidebar.markdown("---")
+op_notes = st.sidebar.text_area("Daily Operational Notes", "No slot delays reported.")
 
-available_iatas = sorted([k for k, v in airports.items() if v['fleet'] in fleet_filter])
-search_iata = st.sidebar.selectbox("Jump to Airport (IATA)", ["Select..."] + available_iatas)
-
+# Map Theme
 map_theme = st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"])
 tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 
-map_center = [48.0, 5.0]
-zoom = 4
+# Logic for Map
+map_center = [48.0, 5.0]; zoom = 4
 if search_iata != "Select...":
-    map_center = [airports[search_iata]["lat"], airports[search_iata]["lon"]]
-    zoom = 10
+    map_center = [airports[search_iata]["lat"], airports[search_iata]["lon"]]; zoom = 10
 
-m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
+m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style, control_scale=True)
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
-warnings = []
+red_alerts = []; amber_alerts = []
 
 # Process Weather
 for iata, info in airports.items():
     if info['fleet'] in fleet_filter:
         try:
-            metar = Metar(info['icao'])
-            metar.update()
-            
+            metar = Metar(info['icao']); metar.update()
             w_dir = metar.data.wind_direction.value if metar.data.wind_direction else 0
             w_spd = metar.data.wind_speed.value if metar.data.wind_speed else 0
             vis = metar.data.visibility.value if metar.data.visibility else 9999
@@ -106,50 +153,59 @@ for iata, info in airports.items():
                         h = layer.base * 100
                         if h < ceiling: ceiling = h
 
-            color = "green"
+            color = "#008000" # Green
             if xw > 25 or vis < 800 or ceiling < 200:
-                color = "red"
-                warnings.append(f"🔴 {iata}: {info['name']} (Below Limits)")
+                color = "#d6001a" # BA Red
+                red_alerts.append(f"{iata}: {info['name']} - Below Limits")
+                counts[info['fleet']]["red"] += 1
             elif xw > 18 or vis < 1500 or ceiling < 500:
-                color = "orange"
-                warnings.append(f"🟠 {iata}: {info['name']} (LVO/Caution)")
-            
-            counts[info['fleet']][color] += 1
+                color = "#eb8f34" # Amber
+                amber_alerts.append(f"{iata}: {info['name']} - LVO Caution")
+                counts[info['fleet']]["orange"] += 1
+            else:
+                counts[info['fleet']]["green"] += 1
 
-            try:
-                taf = Taf(info['icao']); taf.update()
-                taf_txt = taf.raw
-            except: taf_txt = "TAF Unavailable"
+            # Zoom-adaptive radius logic (larger when zoomed in)
+            radius_size = 8 if zoom < 6 else 15
 
-            popup_content = f"<b>{info['name']} ({iata})</b><br>CIG: {ceiling}ft | XW: {xw}kt<hr>{metar.raw}<br><br>{taf_txt}"
             folium.CircleMarker(
                 location=[info['lat'], info['lon']],
-                radius=14, color=color, fill=True, fill_opacity=0.8,
-                popup=folium.Popup(popup_content, max_width=300)
+                radius=radius_size, color=color, fill=True, fill_opacity=0.9,
+                popup=f"<b>{iata}</b><br>CIG: {ceiling}ft<br>XW: {xw}kt<br>{metar.raw}"
             ).add_to(m)
         except: continue
 
-# UI
-st.title("✈️ BA Weather Dashboard")
-st.caption(f"Last Refresh: {datetime.now().strftime('%H:%M:%S')} UTC (Auto-refresh every 30m)")
+# DISPLAY MAIN DASHBOARD
+col_stats1, col_stats2 = st.columns(2)
+with col_stats1:
+    st.subheader("Cityflyer Fleet Status")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Green", counts["Cityflyer"]["green"])
+    c2.metric("Amber", counts["Cityflyer"]["orange"])
+    c3.metric("Red", counts["Cityflyer"]["red"])
+with col_stats2:
+    st.subheader("Euroflyer Fleet Status")
+    c4, c5, c6 = st.columns(3)
+    c4.metric("Green", counts["Euroflyer"]["green"])
+    c5.metric("Amber", counts["Euroflyer"]["orange"])
+    c6.metric("Red", counts["Euroflyer"]["red"])
 
-cols = st.columns(len(fleet_filter) if fleet_filter else 1)
-for i, f in enumerate(fleet_filter):
-    with cols[i]:
-        st.subheader(f"{f} Status")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Green", counts[f]["green"])
-        m2.metric("Amber", counts[f]["orange"])
-        m3.metric("Red", counts[f]["red"])
+st.markdown("---")
 
-c1, c2 = st.columns([4, 1])
-with c1:
-    st_folium(m, width=1200, height=800, key="main_map_v5")
-with c2:
-    st.subheader("⚠️ Critical Alerts")
-    if not warnings:
-        st.success("All Clear")
-    else:
-        for w in warnings:
-            if "🔴" in w: st.error(w)
-            else: st.warning(w)
+col_map, col_alerts = st.columns([3.5, 1])
+
+with col_map:
+    st_folium(m, width=1100, height=750, key="occ_map")
+
+with col_alerts:
+    st.markdown("#### ⚠️ Critical Alerts")
+    for a in red_alerts:
+        st.markdown(f'<div class="alert-card-red">{a}</div>', unsafe_allow_html=True)
+    for a in amber_alerts:
+        st.markdown(f'<div class="alert-card-amber">{a}</div>', unsafe_allow_html=True)
+    if not red_alerts and not amber_alerts:
+        st.success("No active weather alerts.")
+    
+    st.markdown("---")
+    st.markdown("#### 📝 Operational Notes")
+    st.info(op_notes)
