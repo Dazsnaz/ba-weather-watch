@@ -142,11 +142,9 @@ def get_weather(airport_dict):
                 for layer in m.data.clouds:
                     if layer.type in ['BKN', 'OVC'] and layer.base: c = min(c, layer.base * 100)
             
-            # PROB & TSRA LOGIC
+            # TSRA ONLY LOGIC (Removed Probabilities)
             alert_tag = None
             if "TSRA" in t.raw: alert_tag = "⚡ TSRA"
-            elif "PROB40" in t.raw: alert_tag = "❔ PROB40"
-            elif "PROB30" in t.raw: alert_tag = "❔ PROB30"
 
             results[iata] = {"vis": v, "ceiling": c, "raw_m": m.raw, "raw_t": t.raw, "status": "online", "alert_tag": alert_tag}
         except: results[iata] = {"status": "offline", "raw_m": "N/A", "raw_t": "N/A", "alert_tag": None}
@@ -162,7 +160,6 @@ for iata, data in weather_data.items():
     c_limit = 500 if info['spec'] else 200
     
     color = "#008000"; alert = None
-    # Priority logic: Minima > TSRA > PROB
     if data['status'] == "offline": color = "#808080"
     elif data['vis'] < v_limit or data['ceiling'] < c_limit: 
         color = "#d6001a"; alert = "RED"; red_list.append(iata)
@@ -189,7 +186,7 @@ for mkr in map_markers:
 st_folium(m, width=1400, height=500, key=f"map_{len(map_markers)}")
 
 # ANALYSIS SECTION
-st.markdown("### ⚠️ Operational Alerts (inc. Probabilities & TSRA)")
+st.markdown("### ⚠️ Operational Alerts (Minima & TSRA Only)")
 if active_alerts:
     cols = st.columns(6)
     for i, (iata, d) in enumerate(active_alerts.items()):
@@ -209,7 +206,7 @@ if st.session_state.investigate_iata in active_alerts:
     st.markdown(f"""
     <div class="reason-box">
         <h3>{st.session_state.investigate_iata} Analysis</h3>
-        <p><b>Alert Status:</b> {d['type']} identified in TAF/METAR.</p>
+        <p><b>Alert Status:</b> {d['type']} identified.</p>
         <p style="color:#d6001a !important;"><b>✈️ Diversion Assist:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
         <hr>
         <div style="display:flex; gap:20px;">
