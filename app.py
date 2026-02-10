@@ -8,23 +8,47 @@ from datetime import datetime
 # 1. PAGE CONFIG & BRANDING
 st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_icon="✈️")
 
-# CSS to style the buttons specifically by color
 st.markdown("""
     <style>
     .ba-header { background-color: #002366; padding: 20px; color: white; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-family: 'Arial', sans-serif; }
-    
-    /* TARGETING BUTTONS FOR COLORS */
-    div.stButton > button:first-child { height: 3em; width: 100%; border: none; color: white; font-weight: bold; margin-bottom: 5px; }
-    
-    /* Specific classes for color overrides via Label matching or keys is limited in base Streamlit, 
-       so we use a trick with markdown for the visual and a hidden button for the logic if needed, 
-       but for this version, we will use the 'type' parameter or custom CSS mapping. */
-    
+    div.stButton > button { width: 100%; border-radius: 4px; border: none; color: white; font-weight: bold; margin-bottom: 5px; height: 3em; }
     .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-top: 10px; border-top: 5px solid #002366; color: black; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FULL 2026 FLEET DATABASE
+# 2. CACHED WEATHER ENGINE
+# This function only runs once every 30 minutes. 
+# Everything else in the app uses the "stored" results of this function.
+@st.cache_data(ttl=1800)
+def get_fleet_weather(airport_dict):
+    results = {}
+    for iata, info in airport_dict.items():
+        try:
+            m = Metar(info['icao'])
+            m.update()
+            t = Taf(info['icao'])
+            t.update()
+            
+            temp = m.data.temperature.value if m.data.temperature else 0
+            vis = m.data.visibility.value if m.data.visibility else 9999
+            w_dir = m.data.wind_direction.value if m.data.wind_direction else 0
+            w_spd = m.data.wind_speed.value if m.data.wind_speed else 0
+            
+            ceiling = 9999
+            if m.data.clouds:
+                for layer in m.data.clouds:
+                    if layer.type in ['BKN', 'OVC'] and layer.base:
+                        ceiling = min(ceiling, layer.base * 100)
+            
+            results[iata] = {
+                "temp": temp, "vis": vis, "w_dir": w_dir, "w_spd": w_spd,
+                "ceiling": ceiling, "raw_metar": m.raw, "raw_taf": t.raw
+            }
+        except:
+            continue
+    return results
+
+# 3. COMPLETE 2026 FLEET DATABASE
 airports = {
     # CITYFLYER
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
@@ -80,65 +104,58 @@ def get_xwind(w_dir, w_spd, rwy):
     if not w_dir or not w_spd: return 0
     return round(abs(w_spd * math.sin(math.radians(w_dir - rwy))), 1)
 
-# --- UI HEADER ---
+# --- 4. DATA LOADING (EXECUTES OR PULLS FROM CACHE) ---
+weather_data = get_fleet_weather(airports)
+
+# --- 5. UI HEADER ---
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
-# Sidebar Init
+# 6. SIDEBAR & SESSION STATE
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/en/thumb/d/de/British_Airways_Logo.svg/1200px-British_Airways_Logo.svg.png", use_container_width=True)
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
 
 if 'investigate_iata' not in st.session_state:
     st.session_state.investigate_iata = "None"
 
-# Data Processing
-counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
+# Process Filtered Data for Map and Alerts
 active_alerts = {}
+counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 map_markers = []
 
-for iata, info in airports.items():
+for iata, data in weather_data.items():
+    info = airports[iata]
     if info['fleet'] in fleet_filter:
-        try:
-            metar = Metar(info['icao']); metar.update()
-            temp = metar.data.temperature.value if metar.data.temperature else 0
-            vis = metar.data.visibility.value if metar.data.visibility else 9999
-            w_dir = metar.data.wind_direction.value if metar.data.wind_direction else 0
-            w_spd = metar.data.wind_speed.value if metar.data.wind_speed else 0
-            xw = get_xwind(w_dir, w_spd, info['rwy'])
-            
-            ceiling = 9999
-            if metar.data.clouds:
-                for layer in metar.data.clouds:
-                    if layer.type in ['BKN', 'OVC'] and layer.base:
-                        ceiling = min(ceiling, layer.base * 100)
+        xw = get_xwind(data['w_dir'], data['w_spd'], info['rwy'])
+        reasons = []
+        color = "#008000"
+        alert_type = None
 
-            reasons = []
-            color = "#008000"
-            alert_type = None
+        if xw > 25: reasons.append(f"X-Wind {xw}kt"); color = "#d6001a"; alert_type = "red"
+        if data['vis'] < 800: reasons.append(f"Vis {data['vis']}m"); color = "#d6001a"; alert_type = "red"
+        if data['ceiling'] < 200: reasons.append(f"Ceiling {data['ceiling']}ft"); color = "#d6001a"; alert_type = "red"
+        
+        if not alert_type:
+            if xw > 18 or data['vis'] < 1500 or data['ceiling'] < 500:
+                color = "#eb8f34"; alert_type = "amber"
+                if xw > 18: reasons.append(f"Marginal X-Winds")
+                if data['vis'] < 1500: reasons.append(f"LVO Vis")
+                if data['ceiling'] < 500: reasons.append(f"LVO Ceiling")
+        
+        if iata == "IVL" and data['temp'] <= -25:
+            color = "#005a9c"; alert_type = "arctic"; reasons.append(f"Cold Alert")
 
-            if xw > 25: reasons.append(f"X-Wind {xw}kt"); color = "#d6001a"; alert_type = "red"
-            if vis < 800: reasons.append(f"Vis {vis}m"); color = "#d6001a"; alert_type = "red"
-            if ceiling < 200: reasons.append(f"Ceiling {ceiling}ft"); color = "#d6001a"; alert_type = "red"
-            
-            if not alert_type:
-                if xw > 18 or vis < 1500 or ceiling < 500:
-                    color = "#eb8f34"; alert_type = "amber"
-                    if xw > 18: reasons.append(f"Marginal X-Wind ({xw}kt)")
-                    if vis < 1500: reasons.append(f"LVO Vis ({vis}m)")
-                    if ceiling < 500: reasons.append(f"LVO Ceiling ({ceiling}ft)")
-            
-            if iata == "IVL" and temp <= -25:
-                color = "#005a9c"; alert_type = "arctic"; reasons.append(f"Extreme Cold ({temp}°C)")
+        if alert_type:
+            active_alerts[iata] = {"type": alert_type, "reasons": reasons, "metar": data['raw_metar']}
+            counts[info['fleet']]["red" if alert_type=="red" else "orange"] += 1
+        else:
+            counts[info['fleet']]["green"] += 1
 
-            if alert_type:
-                active_alerts[iata] = {"type": alert_type, "reasons": reasons, "metar": metar.raw, "color": color}
-                counts[info['fleet']]["red" if alert_type=="red" else "orange"] += 1
-            else:
-                counts[info['fleet']]["green"] += 1
+        map_markers.append({
+            "iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, 
+            "xw": xw, "vis": data['vis'], "ceiling": data['ceiling'], "raw": data['raw_metar']
+        })
 
-            map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "name": info['name'], "temp": temp, "xw": xw, "ceiling": ceiling, "raw": metar.raw})
-        except: continue
-
-# Map Update Logic
+# 7. MAP LOGIC
 map_center = [48.0, 5.0]; zoom = 4
 if st.session_state.investigate_iata in airports:
     target = airports[st.session_state.investigate_iata]
@@ -154,17 +171,19 @@ for mkr in map_markers:
         popup=folium.Popup(f"<b>{mkr['iata']}</b><br>{mkr['raw']}", max_width=300, show=is_sel)
     ).add_to(m)
 
-# UI RENDER
+# 8. UI RENDER
 st.columns(2)[0].metric("Cityflyer", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
 st.columns(2)[1].metric("Euroflyer", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
 
 m_col, a_col = st.columns([3.5, 1])
-with m_col: st_folium(m, width=1100, height=750, key="occ_map_main")
+with m_col:
+    st_folium(m, width=1100, height=750, key="occ_map_static")
+
 with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
-    for iata, data in active_alerts.items():
-        # Using markdown with a link trick to simulate a clickable colored div
-        if st.button(f"{iata}: {data['type'].upper()}", key=f"btn_{iata}", use_container_width=True, type="primary" if data['type']=='red' else "secondary"):
+    for iata, d in active_alerts.items():
+        btn_type = "primary" if d['type'] == "red" else "secondary"
+        if st.button(f"{iata}: Investigating Issues", key=f"btn_{iata}", type=btn_type):
             st.session_state.investigate_iata = iata
             st.rerun()
     
@@ -173,7 +192,7 @@ with a_col:
         st.markdown(f"""
         <div class="reason-box">
             <h4 style="margin:0;">{st.session_state.investigate_iata} Analysis</h4>
-            <ul style="font-size:14px; margin-top:10px;">{"".join([f"<li>{r}</li>" for r in d['reasons']])}</ul>
+            <ul>{"".join([f"<li>{r}</li>" for r in d['reasons']])}</ul>
             <hr><small>{d['metar']}</small>
         </div>
         """, unsafe_allow_html=True)
