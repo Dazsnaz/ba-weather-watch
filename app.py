@@ -11,15 +11,16 @@ st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_ic
 st.markdown("""
     <style>
     .ba-header { background-color: #002366; padding: 20px; color: white; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-family: 'Arial', sans-serif; }
-    .alert-card-red { background-color: #d6001a; color: white; padding: 12px; border-radius: 4px; margin-bottom: 8px; border-left: 8px solid #8b0000; font-weight: bold; }
+    .alert-card-red { background-color: #d6001a; color: white; padding: 12px; border-radius: 4px; margin-bottom: 8px; border-left: 8px solid #8b0000; font-weight: bold; cursor: pointer; }
     .alert-card-amber { background-color: #eb8f34; color: white; padding: 12px; border-radius: 4px; margin-bottom: 8px; border-left: 8px solid #c46210; font-weight: bold; }
     .alert-card-arctic { background-color: #005a9c; color: white; padding: 12px; border-radius: 4px; margin-bottom: 8px; border-left: 8px solid #add8e6; font-weight: bold; }
+    .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-top: 10px; border-top: 5px solid #002366; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. COMPLETE 2026 FLEET DATABASE
+# 2. FULL 2026 FLEET DATABASE
 airports = {
-    # --- CITYFLYER ---
+    # Cityflyer
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
     "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
     "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
@@ -28,46 +29,15 @@ airports = {
     "EDI": {"icao": "EGPH", "name": "Edinburgh", "fleet": "Cityflyer", "rwy": 240, "lat": 55.950, "lon": -3.363},
     "BHD": {"icao": "EGAC", "name": "Belfast City", "fleet": "Cityflyer", "rwy": 220, "lat": 54.618, "lon": -5.872},
     "STN": {"icao": "EGSS", "name": "Stansted", "fleet": "Cityflyer", "rwy": 220, "lat": 51.885, "lon": 0.235},
-    "SEN": {"icao": "EGMC", "name": "Southend", "fleet": "Cityflyer", "rwy": 230, "lat": 51.571, "lon": 0.701},
     "FLR": {"icao": "LIRQ", "name": "Florence", "fleet": "Cityflyer", "rwy": 50, "lat": 43.810, "lon": 11.205},
-    "AGP": {"icao": "LEMG", "name": "Malaga", "fleet": "Cityflyer", "rwy": 130, "lat": 36.675, "lon": -4.499},
-    "BER": {"icao": "EDDB", "name": "Berlin", "fleet": "Cityflyer", "rwy": 250, "lat": 52.362, "lon": 13.501},
-    "FRA": {"icao": "EDDF", "name": "Frankfurt", "fleet": "Cityflyer", "rwy": 250, "lat": 50.033, "lon": 8.571},
     "LIN": {"icao": "LIML", "name": "Milan Linate", "fleet": "Cityflyer", "rwy": 360, "lat": 45.445, "lon": 9.277},
     "CMF": {"icao": "LFLB", "name": "Chambery", "fleet": "Cityflyer", "rwy": 180, "lat": 45.638, "lon": 5.880},
-    "GVA": {"icao": "LSGG", "name": "Geneva", "fleet": "Cityflyer", "rwy": 220, "lat": 46.237, "lon": 6.109},
-    "ZRH": {"icao": "LSZH", "name": "Zurich", "fleet": "Cityflyer", "rwy": 160, "lat": 47.458, "lon": 8.548},
     "MAD": {"icao": "LEMD", "name": "Madrid", "fleet": "Cityflyer", "rwy": 140, "lat": 40.494, "lon": -3.567},
-    "IBZ": {"icao": "LEIB", "name": "Ibiza", "fleet": "Cityflyer", "rwy": 60, "lat": 38.873, "lon": 1.373},
-    "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
-    "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
-
-    # --- EUROFLYER ---
+    # Euroflyer
     "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
-    "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
-    "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
-    "LYS": {"icao": "LFLL", "name": "Lyon", "fleet": "Euroflyer", "rwy": 350, "lat": 45.726, "lon": 5.090},
+    "IVL": {"icao": "EFIV", "name": "Ivalo", "fleet": "Euroflyer", "rwy": 40, "lat": 68.607, "lon": 27.405},
     "INN": {"icao": "LOWI", "name": "Innsbruck", "fleet": "Euroflyer", "rwy": 260, "lat": 47.260, "lon": 11.344},
     "SZG": {"icao": "LOWS", "name": "Salzburg", "fleet": "Euroflyer", "rwy": 330, "lat": 47.794, "lon": 13.004},
-    "BOD": {"icao": "LFBD", "name": "Bordeaux", "fleet": "Euroflyer", "rwy": 230, "lat": 44.828, "lon": -0.716},
-    "GNB": {"icao": "LFLS", "name": "Grenoble", "fleet": "Euroflyer", "rwy": 90, "lat": 45.363, "lon": 5.330},
-    "NCE": {"icao": "LFMN", "name": "Nice", "fleet": "Euroflyer", "rwy": 40, "lat": 43.665, "lon": 7.215},
-    "TRN": {"icao": "LIMF", "name": "Turin", "fleet": "Euroflyer", "rwy": 360, "lat": 45.202, "lon": 7.649},
-    "VRN": {"icao": "LIPX", "name": "Verona", "fleet": "Euroflyer", "rwy": 40, "lat": 45.396, "lon": 10.888},
-    "ALG": {"icao": "DAAG", "name": "Algiers", "fleet": "Euroflyer", "rwy": 270, "lat": 36.691, "lon": 3.215},
-    "ALC": {"icao": "LEAL", "name": "Alicante", "fleet": "Euroflyer", "rwy": 100, "lat": 38.282, "lon": -0.558},
-    "SVQ": {"icao": "LEZL", "name": "Seville", "fleet": "Euroflyer", "rwy": 270, "lat": 37.418, "lon": -5.893},
-    "RAK": {"icao": "GMMX", "name": "Marrakesh", "fleet": "Euroflyer", "rwy": 100, "lat": 31.606, "lon": -8.036},
-    "AGA": {"icao": "GMAD", "name": "Agadir", "fleet": "Euroflyer", "rwy": 90, "lat": 30.325, "lon": -9.413},
-    "SSH": {"icao": "HESH", "name": "Sharm El Sheikh", "fleet": "Euroflyer", "rwy": 40, "lat": 27.977, "lon": 34.394},
-    "PFO": {"icao": "LCPH", "name": "Paphos", "fleet": "Euroflyer", "rwy": 290, "lat": 34.718, "lon": 32.486},
-    "LCA": {"icao": "LCLK", "name": "Larnaca", "fleet": "Euroflyer", "rwy": 220, "lat": 34.875, "lon": 33.625},
-    "FUE": {"icao": "GCLP", "name": "Fuerteventura", "fleet": "Euroflyer", "rwy": 10, "lat": 28.452, "lon": -13.864},
-    "TFS": {"icao": "GCTS", "name": "Tenerife South", "fleet": "Euroflyer", "rwy": 70, "lat": 28.044, "lon": -16.572},
-    "ACE": {"icao": "GCRR", "name": "Lanzarote", "fleet": "Euroflyer", "rwy": 30, "lat": 28.945, "lon": -13.605},
-    "LPA": {"icao": "GCLP", "name": "Gran Canaria", "fleet": "Euroflyer", "rwy": 30, "lat": 27.931, "lon": -15.386},
-    "IVL": {"icao": "EFIV", "name": "Ivalo", "fleet": "Euroflyer", "rwy": 40, "lat": 68.607, "lon": 27.405},
-    "MLA": {"icao": "LMML", "name": "Malta", "fleet": "Euroflyer", "rwy": 310, "lat": 35.857, "lon": 14.477},
     "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774}
 }
 
@@ -86,7 +56,7 @@ tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB pos
 
 # Data Containers
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
-alerts = []
+active_alerts = {}
 map_markers = []
 
 # Process Data
@@ -106,24 +76,29 @@ for iata, info in airports.items():
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         ceiling = min(ceiling, layer.base * 100)
 
+            reasons = []
             color = "#008000"
             alert_type = None
-            msg = ""
 
-            if xw > 25 or vis < 800 or ceiling < 200:
-                color = "#d6001a"; alert_type = "red"; msg = "BELOW MINIMA"
-                counts[info['fleet']]["red"] += 1
-            elif iata == "IVL" and temp <= -25:
-                color = "#005a9c"; alert_type = "arctic"; msg = f"EXTREME COLD ({temp}°C)"
-                counts[info['fleet']]["orange"] += 1
-            elif xw > 18 or vis < 1500 or ceiling < 500:
-                color = "#eb8f34"; alert_type = "amber"; msg = "MARGINAL / LVO"
-                counts[info['fleet']]["orange"] += 1
-            else:
-                counts[info['fleet']]["green"] += 1
+            if xw > 25: reasons.append(f"Excessive X-Wind ({xw}kt)"); color = "#d6001a"; alert_type = "red"
+            if vis < 800: reasons.append(f"Low Visibility ({vis}m)"); color = "#d6001a"; alert_type = "red"
+            if ceiling < 200: reasons.append(f"Low Ceiling ({ceiling}ft)"); color = "#d6001a"; alert_type = "red"
+            
+            if not alert_type:
+                if xw > 18 or vis < 1500 or ceiling < 500:
+                    color = "#eb8f34"; alert_type = "amber"
+                    if xw > 18: reasons.append(f"Marginal X-Wind ({xw}kt)")
+                    if vis < 1500: reasons.append(f"LVO Conditions ({vis}m)")
+                    if ceiling < 500: reasons.append(f"LVO Ceiling ({ceiling}ft)")
+            
+            if iata == "IVL" and temp <= -25:
+                color = "#005a9c"; alert_type = "arctic"; reasons.append(f"Extreme Cold ({temp}°C)")
 
             if alert_type:
-                alerts.append({"iata": iata, "type": alert_type, "msg": f"{iata}: {msg}"})
+                active_alerts[iata] = {"type": alert_type, "reasons": reasons, "metar": metar.raw}
+                counts[info['fleet']][ "red" if alert_type=="red" else "orange"] += 1
+            else:
+                counts[info['fleet']]["green"] += 1
 
             map_markers.append({
                 "iata": iata, "lat": info['lat'], "lon": info['lon'], 
@@ -132,33 +107,22 @@ for iata, info in airports.items():
             })
         except: continue
 
-# --- ALERT INVESTIGATOR ---
+# --- INVESTIGATOR LOGIC ---
 st.sidebar.markdown("---")
-investigate = st.sidebar.selectbox("🚨 Alert Investigator", ["Select Alert..."] + [a['msg'] for a in alerts])
+investigate_iata = st.sidebar.selectbox("🚨 Investigator: Open Alert Reasons", ["None"] + sorted(list(active_alerts.keys())))
 
 map_center = [48.0, 5.0]; zoom = 4
-selected_iata = None
-
-if investigate != "Select Alert...":
-    selected_iata = investigate.split(":")[0]
-    target = airports[selected_iata]
+if investigate_iata != "None":
+    target = airports[investigate_iata]
     map_center = [target["lat"], target["lon"]]; zoom = 10
 
 m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
-
 for mkr in map_markers:
-    popup_html = f"""
-    <div style="width: 350px; font-family: Arial; background: white; padding: 10px; border-radius: 5px;">
-        <h4 style="color: #002366; border-bottom: 2px solid #002366; margin-top: 0;">{mkr['name']} ({mkr['iata']})</h4>
-        <b>Temp:</b> {mkr['temp']}°C | <b>X-Wind:</b> {mkr['xw']}kt | <b>CIG:</b> {mkr['ceiling']}ft<br>
-        <div style="margin-top:10px; padding:8px; background:#f0f0f0; font-family:monospace; font-size:11px; border-radius: 3px;">{mkr['raw']}</div>
-    </div>"""
-    
     folium.CircleMarker(
         location=[mkr['lat'], mkr['lon']],
-        radius=12 if mkr['iata'] == selected_iata else (6 if zoom < 6 else 12),
+        radius=12 if mkr['iata'] == investigate_iata else (6 if zoom < 6 else 12),
         color=mkr['color'], fill=True, fill_opacity=0.9,
-        popup=folium.Popup(popup_html, max_width=400, show=(mkr['iata'] == selected_iata))
+        popup=folium.Popup(f"<b>{mkr['iata']}</b><br>{mkr['raw']}", max_width=300, show=(mkr['iata'] == investigate_iata))
     ).add_to(m)
 
 # UI RENDER
@@ -168,9 +132,20 @@ with c2: st.metric("Euroflyer Fleet", f"{counts['Euroflyer']['green']}G | {count
 
 st.markdown("---")
 m_col, a_col = st.columns([3.5, 1])
-with m_col: st_folium(m, width=1100, height=750, key="occ_v_interactive")
+with m_col: st_folium(m, width=1100, height=750, key="occ_v_details")
 with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
-    for a in alerts:
-        st.markdown(f'<div class="alert-card-{a["type"]}">{a["msg"]}</div>', unsafe_allow_html=True)
-    st.info("Notes: No active slot delays.")
+    for iata, data in active_alerts.items():
+        st.markdown(f'<div class="alert-card-{data["type"]}">{iata}: See Investigator</div>', unsafe_allow_html=True)
+    
+    if investigate_iata != "None":
+        st.markdown(f"""
+        <div class="reason-box">
+            <h4 style="margin-top:0;">{investigate_iata} Analysis</h4>
+            <ul style="padding-left:20px;">
+                {"".join([f"<li>{r}</li>" for r in active_alerts[investigate_iata]['reasons']])}
+            </ul>
+            <hr>
+            <small><b>METAR:</b> {active_alerts[investigate_iata]['metar']}</small>
+        </div>
+        """, unsafe_allow_html=True)
