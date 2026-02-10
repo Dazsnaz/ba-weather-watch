@@ -14,7 +14,7 @@ st.markdown("""
     /* Global Text Color */
     html, body, [class*="st-"], div, p, h1, h2, h3, h4, label { color: white !important; }
     
-    /* FIX: SIDEBAR SEARCH VISIBILITY */
+    /* FIX: SIDEBAR SEARCH VISIBILITY - Dark Text on White Background */
     [data-testid="stSidebar"] .stTextInput input {
         color: #002366 !important;
         background-color: white !important;
@@ -50,8 +50,7 @@ st.markdown("""
 def calculate_dist(lat1, lon1, lat2, lon2):
     R = 3440.065 # NM
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
+    dphi, dlambda = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
     return round(2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a)), 1)
 
@@ -59,9 +58,8 @@ def calculate_dist(lat1, lon1, lat2, lon2):
 if 'manual_stations' not in st.session_state:
     st.session_state.manual_stations = {}
 
-# --- MASTER FLEET DATABASE (Full 42 Stations) ---
+# --- MASTER FLEET DATABASE ---
 base_airports = {
-    # --- CITYFLYER (CFE) ---
     "LCY": {"icao": "EGLC", "lat": 51.505, "lon": 0.055, "rwy": 270, "fleet": "Cityflyer"},
     "AMS": {"icao": "EHAM", "lat": 52.313, "lon": 4.764, "rwy": 180, "fleet": "Cityflyer"},
     "RTM": {"icao": "EHRD", "lat": 51.957, "lon": 4.440, "rwy": 240, "fleet": "Cityflyer"},
@@ -83,7 +81,6 @@ base_airports = {
     "IBZ": {"icao": "LEIB", "lat": 38.873, "lon": 1.373, "rwy": 60, "fleet": "Cityflyer"},
     "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer"},
     "FAO": {"icao": "LPFR", "lat": 37.017, "lon": -7.965, "rwy": 280, "fleet": "Cityflyer"},
-    # --- EUROFLYER (EFW) ---
     "LGW": {"icao": "EGKK", "lat": 51.148, "lon": -0.190, "rwy": 260, "fleet": "Euroflyer"},
     "JER": {"icao": "EGJJ", "lat": 49.208, "lon": -2.195, "rwy": 260, "fleet": "Euroflyer"},
     "OPO": {"icao": "LPPR", "lat": 41.242, "lon": -8.678, "rwy": 350, "fleet": "Euroflyer"},
@@ -113,7 +110,7 @@ base_airports = {
 
 airports = {**base_airports, **st.session_state.manual_stations}
 
-# SIDEBAR: AD-HOC MANAGEMENT
+# SIDEBAR: MANUAL ADD
 st.sidebar.markdown("### ➕ Manual Station Add")
 with st.sidebar.form("add_station", clear_on_submit=True):
     new_iata = st.text_input("IATA (e.g. CDG)").upper()
@@ -130,13 +127,12 @@ with st.sidebar.form("add_station", clear_on_submit=True):
         except: st.sidebar.error("Invalid ICAO")
 
 if st.session_state.manual_stations:
-    st.sidebar.markdown("### 🗑️ Manage Ad-Hoc")
     for iata in list(st.session_state.manual_stations.keys()):
         if st.sidebar.button(f"Remove {iata}", key=f"del_{iata}"):
             del st.session_state.manual_stations[iata]
             st.rerun()
 
-# 5. WEATHER LOGIC
+# 5. DATA FETCH
 @st.cache_data(ttl=1800)
 def get_fleet_weather(airport_dict):
     results = {}
@@ -161,7 +157,7 @@ def get_fleet_weather(airport_dict):
 
 weather_data = get_fleet_weather(airports)
 
-# SIDEBAR SEARCH & FILTERS
+# SIDEBAR CONTROLS
 st.sidebar.markdown("---")
 search_iata = st.sidebar.text_input("IATA SEARCH", "").upper()
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer", "Ad-Hoc"], default=["Cityflyer", "Euroflyer", "Ad-Hoc"])
@@ -171,14 +167,16 @@ if search_iata in airports: st.session_state.investigate_iata = search_iata
 
 # PROCESS ALERTS
 active_alerts = {}; green_stations = []; red_airports = []; map_markers = []
-counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}, "Ad-Hoc": {"green":0, "orange":0, "red":0}}
+counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}, "Ad-Hoc": {"green": 0, "orange": 0, "red": 0}}
 
 for iata, data in weather_data.items():
     info = airports[iata]
     if info['fleet'] in fleet_filter:
+        # SAFETY CHECK FOR MISSING RWY
+        rwy_hiding = info.get('rwy', 0)
+        xw = round(abs(data['w_spd'] * math.sin(math.radians(data['w_dir'] - rwy_hiding))), 1) if rwy_hiding else 0
+        
         color = "#008000"; alert_type = None; reason = ""
-        xw = round(abs(data['w_spd'] * math.sin(math.radians(data['w_dir'] - info['rwy']))), 1)
-
         if xw > 25 or data['vis'] < 800 or data['ceiling'] < 200: 
             alert_type = "red"; reason = "CRITICAL"
         elif xw > 18 or data['vis'] < 1500 or data['ceiling'] < 500: 
@@ -192,20 +190,18 @@ for iata, data in weather_data.items():
         else: 
             counts[info['fleet']]["green"] += 1
             green_stations.append(iata)
-        
         map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "metar": data['raw_metar'], "taf": data['raw_taf']})
 
-# --- RENDER ---
+# --- UI RENDER ---
 if len(red_airports) >= 3:
     st.markdown(f'<div class="marquee"><span>🚨 NETWORK ADVISORY: Red Alerts at {", ".join(red_airports)}</span></div>', unsafe_allow_html=True)
 
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER HUD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 # METRICS
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 c1.metric("Cityflyer Fleet Status", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
 c2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
-c3.metric("Ad-Hoc/Other Status", f"{counts['Ad-Hoc']['green']}G | {counts['Ad-Hoc']['orange']}A | {counts['Ad-Hoc']['red']}R")
 
 # MAP
 map_center = [48.0, 5.0]; zoom = 4
@@ -216,21 +212,18 @@ if st.session_state.investigate_iata in airports:
 tile_style = "CartoDB dark_matter" if st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"]) == "Dark Mode" else "CartoDB positron"
 m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
 for mkr in map_markers:
-    popup_html = f"<b>{mkr['iata']}</b><br>METAR: {mkr['metar']}"
-    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=folium.Popup(popup_html, max_width=500)).add_to(m)
+    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=mkr['metar']).add_to(m)
 st_folium(m, width=1400, height=500, key="occ_map")
 
-# ALERTS
+# ALERTS & DIVERSION ANALYSIS
 st.markdown("### ⚠️ Operational Alerts")
 if active_alerts:
     cols = st.columns(6)
     for idx, (iata, d) in enumerate(active_alerts.items()):
         with cols[idx % 6]:
             if st.button(f"{iata}: {d['reason']}", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
-                st.session_state.investigate_iata = iata
-                st.rerun()
+                st.session_state.investigate_iata = iata; st.rerun()
 
-# DIVERSION ANALYSIS
 if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
     alt_iata = "None"; min_dist = 9999
@@ -239,10 +232,9 @@ if st.session_state.investigate_iata in active_alerts:
         dist = calculate_dist(cur['lat'], cur['lon'], weather_data[g]['lat'], weather_data[g]['lon'])
         if dist < min_dist: min_dist = dist; alt_iata = g
     
-    st.markdown(f"""<div class="reason-box"><h3>{st.session_state.investigate_iata} Analysis</h3>
-    <p><b>Weather:</b> Vis: {d['vis']}m | Ceiling: {d['ceiling']}ft | XW: {d['xw']}kt.</p>
+    st.markdown(f"""<div class="reason-box"><h3>{st.session_state.investigate_iata} Operational Analysis</h3>
+    <p><b>Weather Detail:</b> Vis: {d['vis']}m | Ceiling: {d['ceiling']}ft | XW: {d['xw']}kt.</p>
     <p style="color:#d6001a !important; font-size:1.1em;"><b>✈️ Diversion Planning:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
-    <p><b>Impact:</b> Probability of diversions or ATC slots is HIGH. Expect long delays.</p>
     <hr>
     <div style="display: flex; gap: 40px;">
         <div><b>METAR:</b><br><small>{d['metar']}</small></div>
