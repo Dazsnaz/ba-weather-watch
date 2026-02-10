@@ -21,12 +21,19 @@ st.markdown("""
     div.stButton > button[kind="primary"] { background-color: #d6001a !important; color: white !important; border: none !important; font-weight: bold; height: 3.5em; width: 100%; }
     div.stButton > button[kind="secondary"] { background-color: #eb8f34 !important; color: white !important; border: none !important; font-weight: bold; height: 3.5em; width: 100%; }
     
+    /* Manual Refresh Button Styling */
+    .refresh-btn > div > button {
+        background-color: #005a9c !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+
     .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 25px; border-radius: 5px; margin-top: 20px; border-top: 10px solid #002366; color: #002366 !important; }
     .reason-box h3, .reason-box p, .reason-box b, .reason-box small, .reason-box li { color: #002366 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. COMPLETE 2026 FLEET DATABASE (42 Airports)
+# 3. COMPLETE FLEET DATABASE
 airports = {
     # --- CITYFLYER (CF) ---
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
@@ -108,16 +115,22 @@ def get_fleet_weather(airport_dict):
 # DATA FETCH
 weather_data = get_fleet_weather(airports)
 
-# SIDEBAR & SEARCH
+# --- SIDEBAR & SEARCH ---
 st.sidebar.markdown("### 🔍 Airport Search")
-search_iata = st.sidebar.text_input("Enter IATA Code (e.g. JER)", "").upper()
+search_iata = st.sidebar.text_input("Enter IATA Code", "").upper()
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
 map_theme = st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"])
+
+st.sidebar.markdown("---")
+# MANUAL REFRESH BUTTON
+if st.sidebar.button("🔄 Refresh Weather Data", key="refresh_manual"):
+    st.cache_data.clear()
+    st.rerun()
 
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# PROCESS ALERTS
+# --- PROCESSING ---
 active_alerts = {}
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 map_markers = []
@@ -145,14 +158,13 @@ for iata, data in weather_data.items():
 # --- UI RENDER ---
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
-# METRICS ROW
 c1, c2 = st.columns(2)
 c1.metric("Cityflyer Fleet Status", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
 c2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
 
 st.markdown("---")
 
-# FULL WIDTH MAP SECTION
+# FULL WIDTH MAP
 map_center = [48.0, 5.0]; zoom = 4
 if st.session_state.investigate_iata in airports:
     target = airports[st.session_state.investigate_iata]
@@ -160,21 +172,20 @@ if st.session_state.investigate_iata in airports:
 
 tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
-
 for mkr in map_markers:
     popup_html = f"""<div style="width: 500px; color: black !important;">
-        <h4 style="color: #002366; border-bottom: 2px solid #002366;">{mkr['iata']} Technical Data</h4>
+        <h4 style="color: #002366; border-bottom: 2px solid #002366;">{mkr['iata']} Tech Data</h4>
         <div style="display: flex; gap: 10px;">
             <div style="flex: 1; background: #eee; padding: 5px; color: black !important;"><b>METAR:</b><br>{mkr['metar']}</div>
             <div style="flex: 1; background: #eee; padding: 5px; color: black !important;"><b>TAF:</b><br>{mkr['taf']}</div>
         </div></div>"""
     folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=12 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=folium.Popup(popup_html, max_width=550)).add_to(m)
 
-st_folium(m, width=1400, height=650, key="master_map_v2")
+st_folium(m, width=1400, height=650, key="full_map_v9")
 
 st.markdown("---")
 
-# HORIZONTAL ALERTS SECTION
+# HORIZONTAL ALERTS
 st.markdown("### ⚠️ Active Operational Alerts")
 if active_alerts:
     alert_cols = st.columns(6) 
@@ -183,23 +194,21 @@ if active_alerts:
             if st.button(f"{iata}: {d['reason']}", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
                 st.session_state.investigate_iata = iata
                 st.rerun()
-else:
-    st.success("No active weather alerts for the selected fleets.")
 
-# HORIZONTAL IMPACT ANALYSIS
+# HORIZONTAL ANALYSIS
 if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
     st.markdown(f"""
     <div class="reason-box">
         <h3>{st.session_state.investigate_iata} Operational Analysis</h3>
-        <p><b>Issue Detail:</b> {d['reason']} identified. Current Visibility: {d['vis']}m | Ceiling: {d['ceiling']}ft | X-Wind: {d['xw']}kt.</p>
+        <p><b>Weather Detail:</b> {d['reason']} identified. Current Vis: {d['vis']}m | Ceiling: {d['ceiling']}ft | X-Wind: {d['xw']}kt.</p>
         <p><b>Actionable Guidance:</b> This forecast is currently below operating limits and <b>may cause diversions or ATC slots</b> due to the weather. Expect <b>long delays to the operation</b> if conditions persist as forecast in the TAF.</p>
         <hr>
         <div style="display: flex; gap: 40px;">
-            <div><b>METAR:</b><br><small>{d['metar']}</small></div>
-            <div><b>TAF Forecast:</b><br><small>{d['taf']}</small></div>
+            <div><b>Current METAR:</b><br><small>{d['metar']}</small></div>
+            <div><b>Full TAF Outlook:</b><br><small>{d['taf']}</small></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("Close Investigation", key="close_view"):
+    if st.button("Close Investigation"):
         st.session_state.investigate_iata = "None"; st.rerun()
