@@ -141,14 +141,18 @@ def get_fleet_weather(airport_dict):
             m = Metar(info['icao']); m.update()
             t = Taf(info['icao']); t.update()
             v = m.data.visibility.value if m.data.visibility else 9999
+            
+            # Handle Variable Winds
+            wind_dir = m.data.wind_direction.value if m.data.wind_direction else 0
+            wind_spd = m.data.wind_speed.value if m.data.wind_speed else 0
+            
             c = 9999
             if m.data.clouds:
                 for layer in m.data.clouds:
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         c = min(c, layer.base * 100)
             results[iata] = {
-                "vis": v, "w_dir": m.data.wind_direction.value if m.data.wind_direction else 0,
-                "w_spd": m.data.wind_speed.value if m.data.wind_speed else 0,
+                "vis": v, "w_dir": wind_dir, "w_spd": wind_spd,
                 "ceiling": c, "raw_metar": m.raw, "raw_taf": t.raw,
                 "lat": info['lat'], "lon": info['lon']
             }
@@ -165,16 +169,18 @@ fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer",
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# PROCESS ALERTS
+# 6. PROCESS ALERTS
 active_alerts = {}; green_stations = []; red_airports = []; map_markers = []
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}, "Ad-Hoc": {"green": 0, "orange": 0, "red": 0}}
 
 for iata, data in weather_data.items():
     info = airports[iata]
     if info['fleet'] in fleet_filter:
-        # SAFETY CHECK FOR MISSING RWY
+        # Crosswind Safety Calculation
         rwy_hiding = info.get('rwy', 0)
-        xw = round(abs(data['w_spd'] * math.sin(math.radians(data['w_dir'] - rwy_hiding))), 1) if rwy_hiding else 0
+        xw = 0
+        if rwy_hiding and isinstance(data['w_dir'], (int, float)):
+             xw = round(abs(data['w_spd'] * math.sin(math.radians(data['w_dir'] - rwy_hiding))), 1)
         
         color = "#008000"; alert_type = None; reason = ""
         if xw > 25 or data['vis'] < 800 or data['ceiling'] < 200: 
@@ -194,11 +200,13 @@ for iata, data in weather_data.items():
 
 # --- UI RENDER ---
 if len(red_airports) >= 3:
+    alert_text = "  |  ".join(red_airports)
     st.markdown(f'<div class="marquee"><span>🚨 NETWORK ADVISORY: Red Alerts at {", ".join(red_airports)}</span></div>', unsafe_allow_html=True)
+
+
 
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER HUD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
-# METRICS
 c1, c2 = st.columns(2)
 c1.metric("Cityflyer Fleet Status", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
 c2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
@@ -223,6 +231,8 @@ if active_alerts:
         with cols[idx % 6]:
             if st.button(f"{iata}: {d['reason']}", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
                 st.session_state.investigate_iata = iata; st.rerun()
+
+
 
 if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
