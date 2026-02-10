@@ -3,11 +3,12 @@ import folium
 from streamlit_folium import st_folium
 from avwx import Metar, Taf
 import math
+from datetime import datetime
 
-# Page Config for wide view
-st.set_page_config(layout="wide", page_title="BA Fleet Weather 2026")
+# Page Config
+st.set_page_config(layout="wide", page_title="BA Fleet Weather 2026", page_icon="✈️")
 
-# 1. Full Database with 2026 Routes (Leading Zeros Removed)
+# 1. Full 2026 Airport Database (Runway headings corrected - no leading zeros)
 airports = {
     "EGLC": {"name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
     "EGKK": {"name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
@@ -54,7 +55,7 @@ def get_xwind(w_dir, w_spd, rwy):
     if not w_dir or not w_spd: return 0
     return round(abs(w_spd * math.sin(math.radians(w_dir - rwy))), 1)
 
-# Sidebar: Filters & Search
+# Sidebar: Controls
 st.sidebar.title("Fleet Controls")
 search_icao = st.sidebar.selectbox("Jump to Airport", ["Select..."] + sorted(list(airports.keys())))
 fleet_filter = st.sidebar.multiselect("Fleet Select", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
@@ -71,7 +72,7 @@ if search_icao != "Select...":
 m = folium.Map(location=map_center, zoom_start=zoom, tiles="CartoDB positron")
 warnings = []
 
-# Logic & Map Population
+# Process Weather
 for icao, info in airports.items():
     if info['fleet'] in fleet_filter:
         try:
@@ -80,33 +81,59 @@ for icao, info in airports.items():
             taf = Taf(icao)
             taf.update()
 
-            # Data Extraction
+            # 1. Crosswind & Vis
             w_dir = metar.data.wind_direction.value if metar.data.wind_direction else 0
             w_spd = metar.data.wind_speed.value if metar.data.wind_speed else 0
             vis = metar.data.visibility.value if metar.data.visibility else 9999
             xw = get_xwind(w_dir, w_spd, info['rwy'])
 
-            # Limits
+            # 2. Ceiling Logic (Lowest BKN or OVC)
+            ceiling = 9999
+            if metar.data.clouds:
+                for layer in metar.data.clouds:
+                    if layer.type in ['BKN', 'OVC'] and layer.altitude is not None:
+                        h = layer.altitude * 100
+                        if h < ceiling: ceiling = h
+
+            # 3. Traffic Light Decisions
             color = "green"
-            if xw > 25 or vis < 800:
+            status_label = "Normal"
+            
+            if xw > 25 or vis < 800 or ceiling < 200:
                 color = "red"
+                status_label = "🔴 BELOW MINIMA"
                 warnings.append(f"🔴 {icao}: {info['name']} (Below Limits)")
-            elif xw > 18 or vis < 1500:
+            elif xw > 18 or vis < 1500 or ceiling < 500:
                 color = "orange"
+                status_label = f"🟠 CAUTION: Marginal (CIG: {ceiling}ft)"
                 warnings.append(f"🟠 {icao}: {info['name']} (Caution)")
             
             counts[info['fleet']][color] += 1
 
-            popup_text = f"<b>{info['name']}</b><br>X-Wind: {xw}kt<br>Vis: {vis}m<hr>{metar.raw}<br><br>{taf.raw}"
+            # Marker Popup
+            popup_html = f"""
+            <div style='width:250px'>
+                <b>{info['name']} ({icao})</b><br>
+                <b>Status:</b> {status_label}<br>
+                <b>Ceiling:</b> {ceiling if ceiling < 9999 else 'Unlimited'}ft<br>
+                <b>X-Wind:</b> {xw}kt<br>
+                <hr>
+                <b>METAR:</b> {metar.raw}<br><br>
+                <b>TAF:</b> {taf.raw}
+            </div>
+            """
             folium.CircleMarker(
                 location=[info['lat'], info['lon']],
                 radius=12, color=color, fill=True, fill_opacity=0.8,
-                popup=folium.Popup(popup_text, max_width=300)
+                popup=folium.Popup(popup_html, max_width=300)
             ).add_to(m)
         except: continue
 
-# Display Fleet Metrics
+# DISPLAY UI
 st.title("✈️ BA Weather Dashboard")
+st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')} UTC")
+
+# Fleet Metrics
 cols = st.columns(2)
 for i, f in enumerate(["Cityflyer", "Euroflyer"]):
     with cols[i]:
@@ -116,14 +143,14 @@ for i, f in enumerate(["Cityflyer", "Euroflyer"]):
         m2.metric("Amber", counts[f]["orange"])
         m3.metric("Red", counts[f]["red"])
 
-# Map & Alert List
+# Map & Warnings
 c1, c2 = st.columns([3, 1])
-with c1: 
-    st_folium(m, width=900, height=600, key="main_map") # Added a key for stability
+with c1:
+    st_folium(m, width="100%", height=600, key="main_map")
 with c2:
-    st.subheader("Critical Alerts")
+    st.subheader("⚠️ Critical Alerts")
     if not warnings:
-        st.success("All airports within limits.")
+        st.success("All airports clear.")
     else:
         for w in warnings:
             if "🔴" in w:
