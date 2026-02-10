@@ -17,7 +17,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-2. DEFINED FLEET DATABASE
+2. DATABASE (IATA Keys)
 airports = {
     # --- CITYFLYER ---
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
