@@ -11,9 +11,18 @@ st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_ic
 # 2. CUSTOM OCC STYLING
 st.markdown("""
     <style>
+    /* Global Text Color */
     html, body, [class*="st-"], div, p, h1, h2, h3, h4, label { color: white !important; }
     
-    /* SCROLLING ALERT FLASH - Triggered at 5+ Red Alerts */
+    /* FIX: SIDEBAR SEARCH VISIBILITY */
+    [data-testid="stSidebar"] .stTextInput input {
+        color: #002366 !important;
+        background-color: white !important;
+        font-weight: bold;
+    }
+    [data-testid="stSidebar"] label p { color: white !important; font-weight: bold; }
+
+    /* SCROLLING ALERT FLASH */
     .marquee {
         width: 100%; background-color: #d6001a; color: white; white-space: nowrap;
         overflow: hidden; box-sizing: border-box; padding: 12px; font-weight: bold;
@@ -32,61 +41,54 @@ st.markdown("""
     div.stButton > button[kind="primary"] { background-color: #d6001a !important; color: white !important; border: none !important; font-weight: bold; height: 3.5em; width: 100%; }
     div.stButton > button[kind="secondary"] { background-color: #eb8f34 !important; color: white !important; border: none !important; font-weight: bold; height: 3.5em; width: 100%; }
     
-    .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 25px; border-radius: 5px; margin-top: 20px; border-top: 10px solid #002366; color: #002366 !important; }
-    .reason-box h3, .reason-box p, .reason-box b, .reason-box small { color: #002366 !important; }
+    .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 25px; border-radius: 5px; margin-top: 20px; border-top: 10px solid #d6001a; color: #002366 !important; }
+    .reason-box h3, .reason-box p, .reason-box b, .reason-box small, .reason-box span { color: #002366 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. COMPLETE FLEET DATABASE
+# 3. UTILITIES
+def calculate_dist(lat1, lon1, lat2, lon2):
+    """Calculate distance in Nautical Miles (NM)"""
+    R = 3440.065 
+    dlat, dlon = math.radians(lat2-lat1), math.radians(lon2-lon1)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return round(R * c, 1)
+
+# --- COMPLETE FLEET DATABASE ---
 airports = {
-    # --- CITYFLYER (CF) ---
-    "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
-    "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
-    "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
-    "DUB": {"icao": "EIDW", "name": "Dublin", "fleet": "Cityflyer", "rwy": 280, "lat": 53.421, "lon": -6.270},
-    "GLA": {"icao": "EGPF", "name": "Glasgow", "fleet": "Cityflyer", "rwy": 230, "lat": 55.871, "lon": -4.433},
-    "EDI": {"icao": "EGPH", "name": "Edinburgh", "fleet": "Cityflyer", "rwy": 240, "lat": 55.950, "lon": -3.363},
-    "BHD": {"icao": "EGAC", "name": "Belfast City", "fleet": "Cityflyer", "rwy": 220, "lat": 54.618, "lon": -5.872},
-    "STN": {"icao": "EGSS", "name": "Stansted", "fleet": "Cityflyer", "rwy": 220, "lat": 51.885, "lon": 0.235},
-    "SEN": {"icao": "EGMC", "name": "Southend", "fleet": "Cityflyer", "rwy": 230, "lat": 51.571, "lon": 0.701},
-    "FLR": {"icao": "LIRQ", "name": "Florence", "fleet": "Cityflyer", "rwy": 50, "lat": 43.810, "lon": 11.205},
-    "AGP": {"icao": "LEMG", "name": "Malaga", "fleet": "Cityflyer", "rwy": 130, "lat": 36.675, "lon": -4.499},
-    "BER": {"icao": "EDDB", "name": "Berlin", "fleet": "Cityflyer", "rwy": 250, "lat": 52.362, "lon": 13.501},
-    "FRA": {"icao": "EDDF", "name": "Frankfurt", "fleet": "Cityflyer", "rwy": 250, "lat": 50.033, "lon": 8.571},
-    "LIN": {"icao": "LIML", "name": "Milan Linate", "fleet": "Cityflyer", "rwy": 360, "lat": 45.445, "lon": 9.277},
-    "CMF": {"icao": "LFLB", "name": "Chambery", "fleet": "Cityflyer", "rwy": 180, "lat": 45.638, "lon": 5.880},
-    "GVA": {"icao": "LSGG", "name": "Geneva", "fleet": "Cityflyer", "rwy": 220, "lat": 46.237, "lon": 6.109},
-    "ZRH": {"icao": "LSZH", "name": "Zurich", "fleet": "Cityflyer", "rwy": 160, "lat": 47.458, "lon": 8.548},
-    "MAD": {"icao": "LEMD", "name": "Madrid", "fleet": "Cityflyer", "rwy": 140, "lat": 40.494, "lon": -3.567},
-    "IBZ": {"icao": "LEIB", "name": "Ibiza", "fleet": "Cityflyer", "rwy": 60, "lat": 38.873, "lon": 1.373},
-    "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
-    "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
-    # --- EUROFLYER (EF) ---
-    "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
-    "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
-    "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
-    "LYS": {"icao": "LFLL", "name": "Lyon", "fleet": "Euroflyer", "rwy": 350, "lat": 45.726, "lon": 5.090},
-    "INN": {"icao": "LOWI", "name": "Innsbruck", "fleet": "Euroflyer", "rwy": 260, "lat": 47.260, "lon": 11.344},
-    "SZG": {"icao": "LOWS", "name": "Salzburg", "fleet": "Euroflyer", "rwy": 330, "lat": 47.794, "lon": 13.004},
-    "BOD": {"icao": "LFBD", "name": "Bordeaux", "fleet": "Euroflyer", "rwy": 230, "lat": 44.828, "lon": -0.716},
-    "GNB": {"icao": "LFLS", "name": "Grenoble", "fleet": "Euroflyer", "rwy": 90, "lat": 45.363, "lon": 5.330},
-    "NCE": {"icao": "LFMN", "name": "Nice", "fleet": "Euroflyer", "rwy": 40, "lat": 43.665, "lon": 7.215},
-    "TRN": {"icao": "LIMF", "name": "Turin", "fleet": "Euroflyer", "rwy": 360, "lat": 45.202, "lon": 7.649},
-    "VRN": {"icao": "LIPX", "name": "Verona", "fleet": "Euroflyer", "rwy": 40, "lat": 45.396, "lon": 10.888},
-    "ALC": {"icao": "LEAL", "name": "Alicante", "fleet": "Euroflyer", "rwy": 100, "lat": 38.282, "lon": -0.558},
-    "SVQ": {"icao": "LEZL", "name": "Seville", "fleet": "Euroflyer", "rwy": 270, "lat": 37.418, "lon": -5.893},
-    "RAK": {"icao": "GMMX", "name": "Marrakesh", "fleet": "Euroflyer", "rwy": 100, "lat": 31.606, "lon": -8.036},
-    "AGA": {"icao": "GMAD", "name": "Agadir", "fleet": "Euroflyer", "rwy": 90, "lat": 30.325, "lon": -9.413},
-    "SSH": {"icao": "HESH", "name": "Sharm El Sheikh", "fleet": "Euroflyer", "rwy": 40, "lat": 27.977, "lon": 34.394},
-    "PFO": {"icao": "LCPH", "name": "Paphos", "fleet": "Euroflyer", "rwy": 290, "lat": 34.718, "lon": 32.486},
-    "LCA": {"icao": "LCLK", "name": "Larnaca", "fleet": "Euroflyer", "rwy": 220, "lat": 34.875, "lon": 33.625},
-    "FUE": {"icao": "GCLP", "name": "Fuerteventura", "fleet": "Euroflyer", "rwy": 10, "lat": 28.452, "lon": -13.864},
-    "TFS": {"icao": "GCTS", "name": "Tenerife South", "fleet": "Euroflyer", "rwy": 70, "lat": 28.044, "lon": -16.572},
-    "ACE": {"icao": "GCRR", "name": "Lanzarote", "fleet": "Euroflyer", "rwy": 30, "lat": 28.945, "lon": -13.605},
-    "LPA": {"icao": "GCLP", "name": "Gran Canaria", "fleet": "Euroflyer", "rwy": 30, "lat": 27.931, "lon": -15.386},
-    "IVL": {"icao": "EFIV", "name": "Ivalo", "fleet": "Euroflyer", "rwy": 40, "lat": 68.607, "lon": 27.405},
-    "MLA": {"icao": "LMML", "name": "Malta", "fleet": "Euroflyer", "rwy": 310, "lat": 35.857, "lon": 14.477},
-    "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774},
+    # CITYFLYER
+    "LCY": {"icao": "EGLC", "lat": 51.505, "lon": 0.055, "rwy": 270, "fleet": "Cityflyer"},
+    "AMS": {"icao": "EHAM", "lat": 52.313, "lon": 4.764, "rwy": 180, "fleet": "Cityflyer"},
+    "RTM": {"icao": "EHRD", "lat": 51.957, "lon": 4.440, "rwy": 240, "fleet": "Cityflyer"},
+    "DUB": {"icao": "EIDW", "lat": 53.421, "lon": -6.270, "rwy": 280, "fleet": "Cityflyer"},
+    "GLA": {"icao": "EGPF", "lat": 55.871, "lon": -4.433, "rwy": 230, "fleet": "Cityflyer"},
+    "EDI": {"icao": "EGPH", "lat": 55.950, "lon": -3.363, "rwy": 240, "fleet": "Cityflyer"},
+    "BHD": {"icao": "EGAC", "lat": 54.618, "lon": -5.872, "rwy": 220, "fleet": "Cityflyer"},
+    "STN": {"icao": "EGSS", "lat": 51.885, "lon": 0.235, "rwy": 220, "fleet": "Cityflyer"},
+    "SEN": {"icao": "EGMC", "lat": 51.571, "lon": 0.701, "rwy": 230, "fleet": "Cityflyer"},
+    "FLR": {"icao": "LIRQ", "lat": 43.810, "lon": 11.205, "rwy": 50, "fleet": "Cityflyer"},
+    "AGP": {"icao": "LEMG", "lat": 36.675, "lon": -4.499, "rwy": 130, "fleet": "Cityflyer"},
+    "BER": {"icao": "EDDB", "lat": 52.362, "lon": 13.501, "rwy": 250, "fleet": "Cityflyer"},
+    "FRA": {"icao": "EDDF", "lat": 50.033, "lon": 8.571, "rwy": 250, "fleet": "Cityflyer"},
+    "LIN": {"icao": "LIML", "lat": 45.445, "lon": 9.277, "rwy": 360, "fleet": "Cityflyer"},
+    "CMF": {"icao": "LFLB", "lat": 45.638, "lon": 5.880, "rwy": 180, "fleet": "Cityflyer"},
+    "GVA": {"icao": "LSGG", "lat": 46.237, "lon": 6.109, "rwy": 220, "fleet": "Cityflyer"},
+    "ZRH": {"icao": "LSZH", "lat": 47.458, "lon": 8.548, "rwy": 160, "fleet": "Cityflyer"},
+    "MAD": {"icao": "LEMD", "lat": 40.494, "lon": -3.567, "rwy": 140, "fleet": "Cityflyer"},
+    "IBZ": {"icao": "LEIB", "lat": 38.873, "lon": 1.373, "rwy": 60, "fleet": "Cityflyer"},
+    "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer"},
+    "FAO": {"icao": "LPFR", "lat": 37.017, "lon": -7.965, "rwy": 280, "fleet": "Cityflyer"},
+    # EUROFLYER
+    "LGW": {"icao": "EGKK", "lat": 51.148, "lon": -0.190, "rwy": 260, "fleet": "Euroflyer"},
+    "JER": {"icao": "EGJJ", "lat": 49.208, "lon": -2.195, "rwy": 260, "fleet": "Euroflyer"},
+    "OPO": {"icao": "LPPR", "lat": 41.242, "lon": -8.678, "rwy": 350, "fleet": "Euroflyer"},
+    "LYS": {"icao": "LFLL", "lat": 45.726, "lon": 5.090, "rwy": 350, "fleet": "Euroflyer"},
+    "INN": {"icao": "LOWI", "lat": 47.260, "lon": 11.344, "rwy": 260, "fleet": "Euroflyer"},
+    "SZG": {"icao": "LOWS", "lat": 47.794, "lon": 13.004, "rwy": 330, "fleet": "Euroflyer"},
+    "NCE": {"icao": "LFMN", "lat": 43.665, "lon": 7.215, "rwy": 40, "fleet": "Euroflyer"},
+    "IVL": {"icao": "EFIV", "lat": 68.607, "lon": 27.405, "rwy": 40, "fleet": "Euroflyer"},
+    "FNC": {"icao": "LPMA", "lat": 32.694, "lon": -16.774, "rwy": 50, "fleet": "Euroflyer"}
 }
 
 def get_xwind(w_dir, w_spd, rwy):
@@ -107,20 +109,19 @@ def get_fleet_weather(airport_dict):
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         c = min(c, layer.base * 100)
             results[iata] = {
-                "temp": m.data.temperature.value if m.data.temperature else 0,
                 "vis": v, "w_dir": m.data.wind_direction.value if m.data.wind_direction else 0,
                 "w_spd": m.data.wind_speed.value if m.data.wind_speed else 0,
-                "ceiling": c, "raw_metar": m.raw, "raw_taf": t.raw
+                "ceiling": c, "raw_metar": m.raw, "raw_taf": t.raw,
+                "lat": info['lat'], "lon": info['lon']
             }
         except: continue
     return results
 
-# DATA FETCH
 weather_data = get_fleet_weather(airports)
 
 # SIDEBAR
 st.sidebar.markdown("### 🔍 Airport Search")
-search_iata = st.sidebar.text_input("Enter IATA Code", "").upper()
+search_iata = st.sidebar.text_input("Enter IATA Code (e.g., LCY)", "").upper()
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
 map_theme = st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"])
 
@@ -131,8 +132,9 @@ if st.sidebar.button("🔄 Manual Data Refresh"):
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# PROCESS ALERTS
+# PROCESS ALERTS & DIVERSION LIST
 active_alerts = {}
+green_stations = []
 red_airports = []
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 map_markers = []
@@ -155,12 +157,14 @@ for iata, data in weather_data.items():
             color = "#d6001a" if alert_type == "red" else "#eb8f34"
             counts[info['fleet']]["red" if alert_type=="red" else "orange"] += 1
             if alert_type == "red": red_airports.append(f"{iata} ({reason})")
-        else: counts[info['fleet']]["green"] += 1
+        else: 
+            counts[info['fleet']]["green"] += 1
+            green_stations.append(iata) # Add to diversion candidates
+        
         map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "metar": data['raw_metar'], "taf": data['raw_taf']})
 
 # --- UI RENDER ---
 
-# ALERT FLASH (Now triggered at 5+ Red Alerts)
 if len(red_airports) >= 5:
     alert_text = "  |  ".join(red_airports)
     st.markdown(f'<div class="marquee"><span>🚨 CRITICAL NETWORK EVENT: {alert_text}</span></div>', unsafe_allow_html=True)
@@ -173,7 +177,7 @@ c2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts[
 
 st.markdown("---")
 
-# FULL WIDTH MAP
+# MAP
 map_center = [48.0, 5.0]; zoom = 4
 if st.session_state.investigate_iata in airports:
     target = airports[st.session_state.investigate_iata]
@@ -182,26 +186,14 @@ if st.session_state.investigate_iata in airports:
 tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
 for mkr in map_markers:
-    # DUAL LANDSCAPE POPUP
-    popup_html = f"""<div style="width: 550px; color: black !important; font-family: sans-serif;">
-        <h4 style="color: #002366; border-bottom: 2px solid #002366; margin: 0 0 10px 0;">{mkr['iata']} Technical Weather</h4>
-        <div style="display: flex; gap: 10px;">
-            <div style="flex: 1; background: #f9f9f9; padding: 12px; border-radius: 4px; border: 1px solid #ccc;">
-                <b style="color: #d6001a;">CURRENT (METAR)</b><br>
-                <code style="font-size: 11px; display: block; margin-top: 5px;">{mkr['metar']}</code>
-            </div>
-            <div style="flex: 1; background: #f9f9f9; padding: 12px; border-radius: 4px; border: 1px solid #ccc;">
-                <b style="color: #005a9c;">FORECAST (TAF)</b><br>
-                <code style="font-size: 11px; display: block; margin-top: 5px;">{mkr['taf']}</code>
-            </div>
-        </div></div>"""
-    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=folium.Popup(popup_html, max_width=600)).add_to(m)
+    popup_html = f"""<div style="width: 450px; color: black !important;"><b>{mkr['iata']} Technical Weather</b><br>METAR: {mkr['metar']}<br>TAF: {mkr['taf']}</div>"""
+    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=folium.Popup(popup_html, max_width=500)).add_to(m)
 
-st_folium(m, width=1400, height=600, key="full_width_map_final")
+st_folium(m, width=1400, height=500, key="occ_map")
 
 st.markdown("---")
 
-# ALERTS SECTION
+# ALERTS
 st.markdown("### ⚠️ Operational Alerts")
 if active_alerts:
     alert_cols = st.columns(6) 
@@ -211,18 +203,32 @@ if active_alerts:
                 st.session_state.investigate_iata = iata
                 st.rerun()
 
-# ANALYSIS SECTION
+# ANALYSIS & DIVERSION PLANNING
 if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
+    
+    # Calculate Diversion
+    alt_iata = "No Green Alternate Found"; alt_dist = 0
+    current_lat = weather_data[st.session_state.investigate_iata]['lat']
+    current_lon = weather_data[st.session_state.investigate_iata]['lon']
+    
+    min_dist = float('inf')
+    for g_iata in green_stations:
+        dist = calculate_dist(current_lat, current_lon, weather_data[g_iata]['lat'], weather_data[g_iata]['lon'])
+        if dist < min_dist:
+            min_dist = dist
+            alt_iata = g_iata
+    
     st.markdown(f"""
     <div class="reason-box">
         <h3>{st.session_state.investigate_iata} Operational Analysis</h3>
-        <p><b>Weather Detail:</b> {d['reason']} identified. Current Vis: {d['vis']}m | Ceiling: {d['ceiling']}ft | X-Wind: {d['xw']}kt.</p>
-        <p><b>Impact Statement:</b> This forecast is currently below operating limits and <b>may cause diversions or ATC slots</b> due to the weather. Expect <b>long delays to the operation</b> if conditions persist as forecast.</p>
+        <p><b>Weather Detail:</b> {d['reason']} identified. Vis: {d['vis']}m | Cig: {d['ceiling']}ft | XW: {d['xw']}kt.</p>
+        <p style="color:#d6001a !important; font-size:1.1em;"><b>✈️ Diversion Planning:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
+        <p><b>Impact Statement:</b> Forecast is below operating limits and <b>may cause diversions or ATC slots</b>. Expect <b>long delays</b>.</p>
         <hr>
         <div style="display: flex; gap: 40px;">
-            <div><b>Current METAR:</b><br><small>{d['metar']}</small></div>
-            <div><b>Full TAF Outlook:</b><br><small>{d['taf']}</small></div>
+            <div><b>METAR:</b><br><small>{d['metar']}</small></div>
+            <div><b>TAF:</b><br><small>{d['taf']}</small></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
