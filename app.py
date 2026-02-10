@@ -118,7 +118,15 @@ for i, f in enumerate(["Cityflyer", "Euroflyer"]):
 
 # Map & Alert List
 c1, c2 = st.columns([3, 1])
-with c1: st_folium(m, width="100%", height=600)
+with c1: 
+    st_folium(m, width=900, height=600, key="main_map") # Added a key for stability
 with c2:
     st.subheader("Critical Alerts")
-    for w in warnings: st.error(w) if "🔴" in w else st.warning(w)
+    if not warnings:
+        st.success("All airports within limits.")
+    else:
+        for w in warnings:
+            if "🔴" in w:
+                st.error(w)
+            else:
+                st.warning(w)
