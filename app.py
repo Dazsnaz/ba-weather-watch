@@ -68,12 +68,44 @@ base_airports = {
     "EDI": {"icao": "EGPH", "lat": 55.950, "lon": -3.363, "rwy": 240, "fleet": "Cityflyer"},
     "BHD": {"icao": "EGAC", "lat": 54.618, "lon": -5.872, "rwy": 220, "fleet": "Cityflyer"},
     "STN": {"icao": "EGSS", "lat": 51.885, "lon": 0.235, "rwy": 220, "fleet": "Cityflyer"},
+    "SEN": {"icao": "EGMC", "lat": 51.571, "lon": 0.701, "rwy": 230, "fleet": "Cityflyer"},
+    "FLR": {"icao": "LIRQ", "lat": 43.810, "lon": 11.205, "rwy": 50, "fleet": "Cityflyer"},
+    "AGP": {"icao": "LEMG", "lat": 36.675, "lon": -4.499, "rwy": 130, "fleet": "Cityflyer"},
+    "BER": {"icao": "EDDB", "lat": 52.362, "lon": 13.501, "rwy": 250, "fleet": "Cityflyer"},
+    "FRA": {"icao": "EDDF", "lat": 50.033, "lon": 8.571, "rwy": 250, "fleet": "Cityflyer"},
+    "LIN": {"icao": "LIML", "lat": 45.445, "lon": 9.277, "rwy": 360, "fleet": "Cityflyer"},
+    "CMF": {"icao": "LFLB", "lat": 45.638, "lon": 5.880, "rwy": 180, "fleet": "Cityflyer"},
+    "GVA": {"icao": "LSGG", "lat": 46.237, "lon": 6.109, "rwy": 220, "fleet": "Cityflyer"},
+    "ZRH": {"icao": "LSZH", "lat": 47.458, "lon": 8.548, "rwy": 160, "fleet": "Cityflyer"},
+    "MAD": {"icao": "LEMD", "lat": 40.494, "lon": -3.567, "rwy": 140, "fleet": "Cityflyer"},
+    "IBZ": {"icao": "LEIB", "lat": 38.873, "lon": 1.373, "rwy": 60, "fleet": "Cityflyer"},
+    "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer"},
+    "FAO": {"icao": "LPFR", "lat": 37.017, "lon": -7.965, "rwy": 280, "fleet": "Cityflyer"},
     "LGW": {"icao": "EGKK", "lat": 51.148, "lon": -0.190, "rwy": 260, "fleet": "Euroflyer"},
     "JER": {"icao": "EGJJ", "lat": 49.208, "lon": -2.195, "rwy": 260, "fleet": "Euroflyer"},
+    "OPO": {"icao": "LPPR", "lat": 41.242, "lon": -8.678, "rwy": 350, "fleet": "Euroflyer"},
+    "LYS": {"icao": "LFLL", "lat": 45.726, "lon": 5.090, "rwy": 350, "fleet": "Euroflyer"},
     "INN": {"icao": "LOWI", "lat": 47.260, "lon": 11.344, "rwy": 260, "fleet": "Euroflyer"},
     "SZG": {"icao": "LOWS", "lat": 47.794, "lon": 13.004, "rwy": 330, "fleet": "Euroflyer"},
+    "BOD": {"icao": "LFBD", "lat": 44.828, "lon": -0.716, "rwy": 230, "fleet": "Euroflyer"},
+    "GNB": {"icao": "LFLS", "lat": 45.363, "lon": 5.330, "rwy": 90, "fleet": "Euroflyer"},
     "NCE": {"icao": "LFMN", "lat": 43.665, "lon": 7.215, "rwy": 40, "fleet": "Euroflyer"},
-    "FNC": {"icao": "LPMA", "lat": 32.694, "lon": -16.774, "rwy": 50, "fleet": "Euroflyer"}
+    "TRN": {"icao": "LIMF", "lat": 45.202, "lon": 7.649, "rwy": 360, "fleet": "Euroflyer"},
+    "VRN": {"icao": "LIPX", "lat": 45.396, "lon": 10.888, "rwy": 40, "fleet": "Euroflyer"},
+    "ALC": {"icao": "LEAL", "lat": 38.282, "lon": -0.558, "rwy": 100, "fleet": "Euroflyer"},
+    "SVQ": {"icao": "LEZL", "lat": 37.418, "lon": -5.893, "rwy": 270, "fleet": "Euroflyer"},
+    "RAK": {"icao": "GMMX", "lat": 31.606, "lon": -8.036, "rwy": 100, "fleet": "Euroflyer"},
+    "AGA": {"icao": "GMAD", "lat": 30.325, "lon": -9.413, "rwy": 90, "fleet": "Euroflyer"},
+    "SSH": {"icao": "HESH", "lat": 27.977, "lon": 34.394, "rwy": 40, "fleet": "Euroflyer"},
+    "PFO": {"icao": "LCPH", "lat": 34.718, "lon": 32.486, "rwy": 290, "fleet": "Euroflyer"},
+    "LCA": {"icao": "LCLK", "lat": 34.875, "lon": 33.625, "rwy": 220, "fleet": "Euroflyer"},
+    "FUE": {"icao": "GCLP", "lat": 28.452, "lon": -13.864, "rwy": 10, "fleet": "Euroflyer"},
+    "TFS": {"icao": "GCTS", "lat": 28.044, "lon": -16.572, "rwy": 70, "fleet": "Euroflyer"},
+    "ACE": {"icao": "GCRR", "lat": 28.945, "lon": -13.605, "rwy": 30, "fleet": "Euroflyer"},
+    "LPA": {"icao": "GCLP", "lat": 27.931, "lon": -15.386, "rwy": 30, "fleet": "Euroflyer"},
+    "IVL": {"icao": "EFIV", "lat": 68.607, "lon": 27.405, "rwy": 40, "fleet": "Euroflyer"},
+    "MLA": {"icao": "LMML", "lat": 35.857, "lon": 14.477, "rwy": 310, "fleet": "Euroflyer"},
+    "FNC": {"icao": "LPMA", "lat": 32.694, "lon": -16.774, "rwy": 50, "fleet": "Euroflyer"},
 }
 
 # 5. SIDEBAR: MANUAL ADD
@@ -117,23 +149,11 @@ def get_fleet_weather(airport_dict):
                 for layer in m.data.clouds:
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         c = min(c, layer.base * 100)
-            
-            # Forecast Analysis
-            t_vis = 9999; t_cig = 9999
-            if t.data:
-                for line in t.data.forecast:
-                    if line.visibility: t_vis = min(t_vis, line.visibility.value)
-                    if line.clouds:
-                        for layer in line.clouds:
-                            if layer.type in ['BKN', 'OVC'] and layer.base:
-                                t_cig = min(t_cig, layer.base * 100)
-
             results[iata] = {
                 "vis": v, "w_dir": m.data.wind_direction.value if m.data.wind_direction else 0,
                 "w_spd": m.data.wind_speed.value if m.data.wind_speed else 0,
                 "ceiling": c, "raw_metar": m.raw, "raw_taf": t.raw,
-                "lat": info['lat'], "lon": info['lon'], "icao": info['icao'],
-                "f_vis": t_vis, "f_cig": t_cig
+                "lat": info['lat'], "lon": info['lon'], "icao": info['icao']
             }
         except: continue
     return results
@@ -174,11 +194,7 @@ for iata, data in weather_data.items():
             if alert_type == "red": red_airports.append(f"{iata}")
         else: green_stations.append(iata)
         
-        map_markers.append({
-            "iata": iata, "icao": info['icao'], "lat": info['lat'], "lon": info['lon'], 
-            "color": color, "metar": data['raw_metar'], "taf": data['raw_taf'],
-            "f_vis": data['f_vis'], "f_cig": data['f_cig']
-        })
+        map_markers.append({"iata": iata, "icao": info['icao'], "lat": info['lat'], "lon": info['lon'], "color": color, "metar": data['raw_metar'], "taf": data['raw_taf']})
 
 # --- UI RENDER ---
 if len(red_airports) >= 3:
@@ -196,19 +212,16 @@ tile_style = "CartoDB dark_matter" if st.sidebar.radio("Map Theme", ["Dark Mode"
 m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
 
 for mkr in map_markers:
-    # Forecast highlight logic
-    f_color = "#f0f2f6"
-    if mkr['f_vis'] < 800 or mkr['f_cig'] < 200: f_color = "#ffe6e6; border: 2px solid #d6001a;"
-    
+    # DUAL PANEL POPUP LOGIC
     popup_html = f"""
     <div style="width: 500px; color: black !important; font-family: 'Courier New', monospace;">
-        <h4 style="margin:0; color:#002366; border-bottom:1px solid #002366;">{mkr['iata']} / {mkr['icao']} Status</h4>
+        <h4 style="margin:0; color:#002366; border-bottom:1px solid #002366;">{mkr['iata']} / {mkr['icao']} Weather Data</h4>
         <div style="display:flex; gap:10px; margin-top:10px;">
             <div style="flex:1; background:#f0f2f6; padding:10px; border-radius:5px;">
-                <b style="color:#002366;">CURRENT (METAR)</b><br><small>{mkr['metar']}</small>
+                <b>METAR</b><br><small>{mkr['metar']}</small>
             </div>
-            <div style="flex:1; background:{f_color} padding:10px; border-radius:5px;">
-                <b style="color:#d6001a;">FORECAST (TAF)</b><br><small>{mkr['taf']}</small>
+            <div style="flex:1; background:#f0f2f6; padding:10px; border-radius:5px;">
+                <b>TAF</b><br><small>{mkr['taf']}</small>
             </div>
         </div>
     </div>
@@ -220,9 +233,18 @@ for mkr in map_markers:
         popup=folium.Popup(popup_html, max_width=600)
     ).add_to(m)
 
+# Use a dynamic key based on markers length to force map refresh
 st_folium(m, width=1400, height=500, key=f"occ_map_v{len(map_markers)}")
 
-# 9. ANALYSIS
+# 9. ALERTS & ANALYSIS
+st.markdown("### ⚠️ Operational Alerts")
+if active_alerts:
+    cols = st.columns(6)
+    for idx, (iata, d) in enumerate(active_alerts.items()):
+        with cols[idx % 6]:
+            if st.button(f"{iata}: {d['reason']}", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
+                st.session_state.investigate_iata = iata; st.rerun()
+
 if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
     alt_iata = "None"; min_dist = 9999
@@ -233,9 +255,10 @@ if st.session_state.investigate_iata in active_alerts:
     
     st.markdown(f"""
     <div class="reason-box">
-        <h3>{st.session_state.investigate_iata} Analysis</h3>
-        <p><b>Diversion Planning:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
-        <p><b>Impact:</b> Probability of holding/diversions is HIGH. Flow rate restricted.</p>
+        <h3>{st.session_state.investigate_iata} Operational Analysis</h3>
+        <p><b>Weather Detail:</b> {d['reason']} identified. Vis: {d['vis']}m | Ceiling: {d['ceiling']}ft | XW: {d['xw']}kt.</p>
+        <p style="color:#d6001a !important; font-size:1.1em;"><b>✈️ Diversion Planning:</b> Closest Green station is <b>{alt_iata}</b> ({min_dist} NM).</p>
+        <p><b>Impact:</b> High risk of ATC slots or holding. Flow rate likely restricted.</p>
         <hr>
         <div style="display:flex; gap:20px;">
             <div><b>METAR:</b><br><small>{d['metar']}</small></div>
