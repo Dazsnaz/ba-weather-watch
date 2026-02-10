@@ -3,7 +3,7 @@ import folium
 from streamlit_folium import st_folium
 from avwx import Metar, Taf
 import math
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # 1. PAGE CONFIG
 st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_icon="✈️")
@@ -20,10 +20,63 @@ st.markdown("""
     div.stButton > button[kind="secondary"] { background-color: #eb8f34 !important; color: white !important; border: none !important; width: 100%; font-weight: bold; }
     .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 20px; border-radius: 5px; margin-top: 10px; border-top: 8px solid #002366; color: black; line-height: 1.6; }
     .impact-stat { background-color: #f0f2f6; padding: 10px; border-radius: 5px; font-weight: bold; color: #002366; text-align: center; margin-bottom: 10px; border: 1px solid #002366; }
+    .metar-taf-container { background-color: #f9f9f9; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px; margin-top: 10px; border: 1px solid #ccc; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. CACHED WEATHER ENGINE
+# 3. COMPLETE 2026 FLEET DATABASE
+airports = {
+    # CITYFLYER (CF)
+    "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
+    "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
+    "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
+    "DUB": {"icao": "EIDW", "name": "Dublin", "fleet": "Cityflyer", "rwy": 280, "lat": 53.421, "lon": -6.270},
+    "GLA": {"icao": "EGPF", "name": "Glasgow", "fleet": "Cityflyer", "rwy": 230, "lat": 55.871, "lon": -4.433},
+    "EDI": {"icao": "EGPH", "name": "Edinburgh", "fleet": "Cityflyer", "rwy": 240, "lat": 55.950, "lon": -3.363},
+    "BHD": {"icao": "EGAC", "name": "Belfast City", "fleet": "Cityflyer", "rwy": 220, "lat": 54.618, "lon": -5.872},
+    "STN": {"icao": "EGSS", "name": "Stansted", "fleet": "Cityflyer", "rwy": 220, "lat": 51.885, "lon": 0.235},
+    "SEN": {"icao": "EGMC", "name": "Southend", "fleet": "Cityflyer", "rwy": 230, "lat": 51.571, "lon": 0.701},
+    "FLR": {"icao": "LIRQ", "name": "Florence", "fleet": "Cityflyer", "rwy": 50, "lat": 43.810, "lon": 11.205},
+    "AGP": {"icao": "LEMG", "name": "Malaga", "fleet": "Cityflyer", "rwy": 130, "lat": 36.675, "lon": -4.499},
+    "BER": {"icao": "EDDB", "name": "Berlin", "fleet": "Cityflyer", "rwy": 250, "lat": 52.362, "lon": 13.501},
+    "FRA": {"icao": "EDDF", "name": "Frankfurt", "fleet": "Cityflyer", "rwy": 250, "lat": 50.033, "lon": 8.571},
+    "LIN": {"icao": "LIML", "name": "Milan Linate", "fleet": "Cityflyer", "rwy": 360, "lat": 45.445, "lon": 9.277},
+    "CMF": {"icao": "LFLB", "name": "Chambery", "fleet": "Cityflyer", "rwy": 180, "lat": 45.638, "lon": 5.880},
+    "GVA": {"icao": "LSGG", "name": "Geneva", "fleet": "Cityflyer", "rwy": 220, "lat": 46.237, "lon": 6.109},
+    "ZRH": {"icao": "LSZH", "name": "Zurich", "fleet": "Cityflyer", "rwy": 160, "lat": 47.458, "lon": 8.548},
+    "MAD": {"icao": "LEMD", "name": "Madrid", "fleet": "Cityflyer", "rwy": 140, "lat": 40.494, "lon": -3.567},
+    "IBZ": {"icao": "LEIB", "name": "Ibiza", "fleet": "Cityflyer", "rwy": 60, "lat": 38.873, "lon": 1.373},
+    "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
+    "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
+
+    # EUROFLYER (EF)
+    "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
+    "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
+    "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
+    "LYS": {"icao": "LFLL", "name": "Lyon", "fleet": "Euroflyer", "rwy": 350, "lat": 45.726, "lon": 5.090},
+    "INN": {"icao": "LOWI", "name": "Innsbruck", "fleet": "Euroflyer", "rwy": 260, "lat": 47.260, "lon": 11.344},
+    "SZG": {"icao": "LOWS", "name": "Salzburg", "fleet": "Euroflyer", "rwy": 330, "lat": 47.794, "lon": 13.004},
+    "BOD": {"icao": "LFBD", "name": "Bordeaux", "fleet": "Euroflyer", "rwy": 230, "lat": 44.828, "lon": -0.716},
+    "GNB": {"icao": "LFLS", "name": "Grenoble", "fleet": "Euroflyer", "rwy": 90, "lat": 45.363, "lon": 5.330},
+    "NCE": {"icao": "LFMN", "name": "Nice", "fleet": "Euroflyer", "rwy": 40, "lat": 43.665, "lon": 7.215},
+    "TRN": {"icao": "LIMF", "name": "Turin", "fleet": "Euroflyer", "rwy": 360, "lat": 45.202, "lon": 7.649},
+    "VRN": {"icao": "LIPX", "name": "Verona", "fleet": "Euroflyer", "rwy": 40, "lat": 45.396, "lon": 10.888},
+    "ALC": {"icao": "LEAL", "name": "Alicante", "fleet": "Euroflyer", "rwy": 100, "lat": 38.282, "lon": -0.558},
+    "SVQ": {"icao": "LEZL", "name": "Seville", "fleet": "Euroflyer", "rwy": 270, "lat": 37.418, "lon": -5.893},
+    "RAK": {"icao": "GMMX", "name": "Marrakesh", "fleet": "Euroflyer", "rwy": 100, "lat": 31.606, "lon": -8.036},
+    "AGA": {"icao": "GMAD", "name": "Agadir", "fleet": "Euroflyer", "rwy": 90, "lat": 30.325, "lon": -9.413},
+    "SSH": {"icao": "HESH", "name": "Sharm El Sheikh", "fleet": "Euroflyer", "rwy": 40, "lat": 27.977, "lon": 34.394},
+    "PFO": {"icao": "LCPH", "name": "Paphos", "fleet": "Euroflyer", "rwy": 290, "lat": 34.718, "lon": 32.486},
+    "LCA": {"icao": "LCLK", "name": "Larnaca", "fleet": "Euroflyer", "rwy": 220, "lat": 34.875, "lon": 33.625},
+    "FUE": {"icao": "GCLP", "name": "Fuerteventura", "fleet": "Euroflyer", "rwy": 10, "lat": 28.452, "lon": -13.864},
+    "TFS": {"icao": "GCTS", "name": "Tenerife South", "fleet": "Euroflyer", "rwy": 70, "lat": 28.044, "lon": -16.572},
+    "ACE": {"icao": "GCRR", "name": "Lanzarote", "fleet": "Euroflyer", "rwy": 30, "lat": 28.945, "lon": -13.605},
+    "LPA": {"icao": "GCLP", "name": "Gran Canaria", "fleet": "Euroflyer", "rwy": 30, "lat": 27.931, "lon": -15.386},
+    "IVL": {"icao": "EFIV", "name": "Ivalo", "fleet": "Euroflyer", "rwy": 40, "lat": 68.607, "lon": 27.405},
+    "MLA": {"icao": "LMML", "name": "Malta", "fleet": "Euroflyer", "rwy": 310, "lat": 35.857, "lon": 14.477},
+    "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774},
+}
+
 @st.cache_data(ttl=1800)
 def get_fleet_weather(airport_dict):
     results = {}
@@ -43,37 +96,19 @@ def get_fleet_weather(airport_dict):
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         ceiling = min(ceiling, layer.base * 100)
             
-            forecast_low = False
+            # Forecast Logic
+            f_low = False
             if t.data.forecast:
                 for line in t.data.forecast[:2]:
                     f_vis = line.visibility.value if line.visibility else 9999
-                    if f_vis < 1500: forecast_low = True
+                    if f_vis < 1500: f_low = True
 
             results[iata] = {
                 "temp": temp, "vis": vis, "w_dir": w_dir, "w_spd": w_spd,
-                "ceiling": ceiling, "raw_metar": m.raw, "raw_taf": t.raw, "f_low": forecast_low
+                "ceiling": ceiling, "raw_metar": m.raw, "raw_taf": t.raw, "f_low": f_low
             }
         except: continue
     return results
-
-# 4. DATABASE (Cityflyer & Euroflyer)
-airports = {
-    "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
-    "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
-    "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
-    "DUB": {"icao": "EIDW", "name": "Dublin", "fleet": "Cityflyer", "rwy": 280, "lat": 53.421, "lon": -6.270},
-    "GLA": {"icao": "EGPF", "name": "Glasgow", "fleet": "Cityflyer", "rwy": 230, "lat": 55.871, "lon": -4.433},
-    "EDI": {"icao": "EGPH", "name": "Edinburgh", "fleet": "Cityflyer", "rwy": 240, "lat": 55.950, "lon": -3.363},
-    "BHD": {"icao": "EGAC", "name": "Belfast City", "fleet": "Cityflyer", "rwy": 220, "lat": 54.618, "lon": -5.872},
-    "STN": {"icao": "EGSS", "name": "Stansted", "fleet": "Cityflyer", "rwy": 220, "lat": 51.885, "lon": 0.235},
-    "FLR": {"icao": "LIRQ", "name": "Florence", "fleet": "Cityflyer", "rwy": 50, "lat": 43.810, "lon": 11.205},
-    "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
-    "IVL": {"icao": "EFIV", "name": "Ivalo", "fleet": "Euroflyer", "rwy": 40, "lat": 68.607, "lon": 27.405},
-    "INN": {"icao": "LOWI", "name": "Innsbruck", "fleet": "Euroflyer", "rwy": 260, "lat": 47.260, "lon": 11.344},
-    "SZG": {"icao": "LOWS", "name": "Salzburg", "fleet": "Euroflyer", "rwy": 330, "lat": 47.794, "lon": 13.004},
-    "MLA": {"icao": "LMML", "name": "Malta", "fleet": "Euroflyer", "rwy": 310, "lat": 35.857, "lon": 14.477},
-    "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774},
-}
 
 def get_xwind(w_dir, w_spd, rwy):
     if not w_dir or not w_spd: return 0
@@ -82,10 +117,9 @@ def get_xwind(w_dir, w_spd, rwy):
 # LOAD DATA
 weather_data = get_fleet_weather(airports)
 
-# 5. SIDEBAR NAVIGATION
+# 5. SIDEBAR
 st.sidebar.markdown("### Airport Search")
 search_iata = st.sidebar.text_input("Enter IATA Code", "").upper()
-
 st.sidebar.markdown("---")
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
 map_theme = st.sidebar.radio("Map Theme", ["Light Mode", "Dark Mode"])
@@ -94,7 +128,7 @@ tile_style = "CartoDB positron" if map_theme == "Light Mode" else "CartoDB dark_
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# 6. PROCESS DATA
+# 6. PROCESSING
 active_alerts = {}
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 map_markers = []
@@ -105,6 +139,7 @@ for iata, data in weather_data.items():
         xw = get_xwind(data['w_dir'], data['w_spd'], info['rwy'])
         color = "#008000"
         alert_type = None
+        
         if xw > 25 or data['vis'] < 800 or data['ceiling'] < 200:
             color = "#d6001a"; alert_type = "red"
         elif xw > 18 or data['vis'] < 1500 or data['ceiling'] < 500:
@@ -114,22 +149,21 @@ for iata, data in weather_data.items():
             color = "#005a9c"; alert_type = "arctic"
 
         if alert_type:
-            active_alerts[iata] = {"type": alert_type, "vis": data['vis'], "ceiling": data['ceiling'], "xw": xw, "f_low": data['f_low'], "metar": data['raw_metar']}
+            active_alerts[iata] = {"type": alert_type, "vis": data['vis'], "ceiling": data['ceiling'], "xw": xw, "f_low": data['f_low'], "metar": data['raw_metar'], "taf": data['raw_taf']}
             counts[info['fleet']]["red" if alert_type=="red" else "orange"] += 1
         else:
             counts[info['fleet']]["green"] += 1
         map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "raw": data['raw_metar']})
 
-# 7. HEADER
+# 7. UI RENDER
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-col1.metric("Cityflyer Fleet Status", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
-col2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
+c1, c2 = st.columns(2)
+c1.metric("Cityflyer Fleet Status", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
+c2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
 
 st.markdown("---")
 
-# 8. MAIN DISPLAY
 m_col, a_col = st.columns([3, 1.2])
 
 with m_col:
@@ -140,46 +174,32 @@ with m_col:
     
     m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
     for mkr in map_markers:
-        is_sel = mkr['iata'] == st.session_state.investigate_iata
         folium.CircleMarker(
             location=[mkr['lat'], mkr['lon']],
-            radius=14 if is_sel else (6 if zoom < 6 else 10),
+            radius=12 if mkr['iata'] == st.session_state.investigate_iata else 7,
             color=mkr['color'], fill=True, fill_opacity=0.9,
-            popup=folium.Popup(f"<b>{mkr['iata']}</b><br>{mkr['raw']}", max_width=300, show=is_sel)
+            popup=f"<b>{mkr['iata']}</b><br>{mkr['raw']}"
         ).add_to(m)
-    st_folium(m, width=1000, height=700, key="occ_map")
+    st_folium(m, width=1000, height=700, key="occ_map_v2")
 
 with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
     for iata, d in active_alerts.items():
-        btn_kind = "primary" if d['type'] == "red" else "secondary"
-        if st.button(f"{iata}: Critical Weather Issues", key=f"btn_{iata}", type=btn_kind):
+        if st.button(f"{iata}: Investigating Issues", key=f"btn_{iata}", type="primary" if d['type'] == "red" else "secondary"):
             st.session_state.investigate_iata = iata
             st.rerun()
     
     if st.session_state.investigate_iata in active_alerts:
         d = active_alerts[st.session_state.investigate_iata]
-        
-        # IMPACT STATS LOGIC (Simulated for CFE/EFW/BA in 2026)
-        # In a production env, this pulls from the Flight Ops API
-        at_risk_arrivals = 3 if st.session_state.investigate_iata == "LCY" else 2
-        
         st.markdown(f"""
         <div class="reason-box">
-            <h3 style="margin:0; color:#002366;">{st.session_state.investigate_iata} Impact Analysis</h3>
-            
-            <div style="margin-top:15px;" class="impact-stat">
-                {at_risk_arrivals} Scheduled BA/CFE/EFW Arrivals (T+4hrs)
-            </div>
-
-            <p><b>Summary:</b> {st.session_state.investigate_iata} visibility is {d['vis']}m with a cloud base of {d['ceiling']}ft.</p>
-            <p><b>Trend:</b> Weather is {"forecast to remain below limits." if d['f_low'] else "improving shortly."}</p>
-            <p><b>Risk:</b> High probability of diversions and network disruption for upcoming fleet arrivals.</p>
-            <hr>
-            <small><b>Latest METAR:</b><br>{d['metar']}</small>
+            <h3 style="margin:0; color:#002366;">{st.session_state.investigate_iata} Analysis</h3>
+            <div class="impact-stat">Potential disruption to BA/CFE/EFW arrivals</div>
+            <p><b>Impact:</b> Visibility {d['vis']}m, Ceiling {d['ceiling']}ft, XW {d['xw']}kt.</p>
+            <p><b>Outlook:</b> Weather is {"forecast to persist below minima." if d['f_low'] else "expected to improve."} This may cause diversions.</p>
+            <div class="metar-taf-container"><b>METAR:</b><br>{d['metar']}<br><br><b>TAF:</b><br>{d['taf']}</div>
         </div>
         """, unsafe_allow_html=True)
-        
-        if st.button("Close Analysis", key="close_btn"):
+        if st.button("Close Analysis"):
             st.session_state.investigate_iata = "None"
             st.rerun()
