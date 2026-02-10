@@ -72,22 +72,21 @@ if search_icao != "Select...":
 m = folium.Map(location=map_center, zoom_start=zoom, tiles="CartoDB positron")
 warnings = []
 
-# Process Weather
+# --- IMPROVED PROCESS WEATHER LOOP ---
 for icao, info in airports.items():
     if info['fleet'] in fleet_filter:
         try:
+            # Separate METAR and TAF fetches so one failure doesn't kill both
             metar = Metar(icao)
             metar.update()
-            taf = Taf(icao)
-            taf.update()
-
-            # 1. Crosswind & Vis
+            
+            # 1. Weather Data
             w_dir = metar.data.wind_direction.value if metar.data.wind_direction else 0
             w_spd = metar.data.wind_speed.value if metar.data.wind_speed else 0
             vis = metar.data.visibility.value if metar.data.visibility else 9999
             xw = get_xwind(w_dir, w_spd, info['rwy'])
 
-            # 2. Ceiling Logic (Lowest BKN or OVC)
+            # 2. Ceiling Logic
             ceiling = 9999
             if metar.data.clouds:
                 for layer in metar.data.clouds:
@@ -110,16 +109,23 @@ for icao, info in airports.items():
             
             counts[info['fleet']][color] += 1
 
+            # Try to get TAF, but don't fail if it's unavailable
+            try:
+                taf = Taf(icao)
+                taf.update()
+                taf_raw = taf.raw
+            except:
+                taf_raw = "TAF temporarily unavailable"
+
             # Marker Popup
             popup_html = f"""
             <div style='width:250px'>
                 <b>{info['name']} ({icao})</b><br>
                 <b>Status:</b> {status_label}<br>
-                <b>Ceiling:</b> {ceiling if ceiling < 9999 else 'Unlimited'}ft<br>
-                <b>X-Wind:</b> {xw}kt<br>
+                <b>Ceiling:</b> {ceiling if ceiling < 9999 else 'Unlimited'}ft | <b>X-Wind:</b> {xw}kt<br>
                 <hr>
                 <b>METAR:</b> {metar.raw}<br><br>
-                <b>TAF:</b> {taf.raw}
+                <b>TAF:</b> {taf_raw}
             </div>
             """
             folium.CircleMarker(
@@ -127,7 +133,11 @@ for icao, info in airports.items():
                 radius=12, color=color, fill=True, fill_opacity=0.8,
                 popup=folium.Popup(popup_html, max_width=300)
             ).add_to(m)
-        except: continue
+            
+        except Exception as e:
+            # If an airport fails, show a warning in the sidebar instead of just disappearing
+            st.sidebar.error(f"Could not load {icao}: {e}")
+            continue
 
 # DISPLAY UI
 st.title("✈️ BA Weather Dashboard")
