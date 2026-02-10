@@ -15,9 +15,9 @@ airports = {
     "EGST": {"name": "Stansted", "fleet": "Cityflyer", "rwy": 220, "lat": 51.885, "lon": 0.235},
     "EGLF": {"name": "Glasgow", "fleet": "Cityflyer", "rwy": 230, "lat": 55.871, "lon": -4.433},
     "LFTH": {"name": "Toulon (St Tropez)", "fleet": "Cityflyer", "rwy": 310, "lat": 43.097, "lon": 6.146},
-    "LIEO": {"name": "Olbia (Sardinia)", "fleet": "Cityflyer", "rwy": 050, "lat": 40.898, "lon": 9.517},
+    "LIEO": {"name": "Olbia (Sardinia)", "fleet": "Cityflyer", "rwy": 50, "lat": 40.898, "lon": 9.517},
     "LESO": {"name": "San Sebastián", "fleet": "Cityflyer", "rwy": 220, "lat": 43.356, "lon": -1.791},
-    "LIRQ": {"name": "Florence", "fleet": "Cityflyer", "rwy": 050, "lat": 43.810, "lon": 11.205},
+    "LIRQ": {"name": "Florence", "fleet": "Cityflyer", "rwy": 50, "lat": 43.810, "lon": 11.205},
     "LOWS": {"name": "Salzburg", "fleet": "Euroflyer", "rwy": 330, "lat": 47.794, "lon": 13.004}
 }
 
