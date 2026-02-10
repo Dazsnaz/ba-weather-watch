@@ -8,31 +8,37 @@ from datetime import datetime
 # 1. PAGE CONFIG & BRANDING
 st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_icon="✈️")
 
-# CUSTOM CSS FOR ALIGNMENT AND AMBER BUTTONS
+# CUSTOM CSS FOR OCC SIDEBAR AND LIGHTER BLUE TABS
 st.markdown("""
     <style>
+    /* Header Styling */
     .ba-header { background-color: #002366; padding: 20px; color: white; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-family: 'Arial', sans-serif; }
     
-    /* Aligning the metric headers */
-    .metric-container { display: flex; justify-content: space-between; align-items: center; }
+    /* SIDEBAR NAVY BLUE BACKGROUND */
+    [data-testid="stSidebar"] {
+        background-color: #002366 !important;
+        color: white !important;
+    }
+    
+    /* ACTIVE FLEET TABS / MULTISELECT STYLING */
+    span[data-baseweb="tag"] {
+        background-color: #005a9c !important; /* Lighter Royal Blue */
+        color: white !important;
+    }
+    div[data-baseweb="select"] > div {
+        background-color: #005a9c !important;
+        color: white !important;
+        border: none !important;
+    }
+    
+    /* Text colors in sidebar */
+    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {
+        color: white !important;
+    }
 
     /* Button Colors */
-    /* Red Buttons (Primary) */
-    div.stButton > button[kind="primary"] {
-        background-color: #d6001a !important;
-        color: white !important;
-        border: none !important;
-        width: 100%;
-        font-weight: bold;
-    }
-    /* Amber Buttons (Secondary) - Forced to Orange */
-    div.stButton > button[kind="secondary"] {
-        background-color: #eb8f34 !important;
-        color: white !important;
-        border: none !important;
-        width: 100%;
-        font-weight: bold;
-    }
+    div.stButton > button[kind="primary"] { background-color: #d6001a !important; color: white !important; border: none !important; width: 100%; font-weight: bold; }
+    div.stButton > button[kind="secondary"] { background-color: #eb8f34 !important; color: white !important; border: none !important; width: 100%; font-weight: bold; }
     
     .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-top: 10px; border-top: 5px solid #002366; color: black; }
     </style>
@@ -44,18 +50,14 @@ def get_fleet_weather(airport_dict):
     results = {}
     for iata, info in airport_dict.items():
         try:
-            m = Metar(info['icao'])
-            m.update()
-            t = Taf(info['icao'])
-            t.update()
+            m = Metar(info['icao']); m.update()
+            t = Taf(info['icao']); t.update()
             results[iata] = {
                 "temp": m.data.temperature.value if m.data.temperature else 0,
                 "vis": m.data.visibility.value if m.data.visibility else 9999,
                 "w_dir": m.data.wind_direction.value if m.data.wind_direction else 0,
                 "w_spd": m.data.wind_speed.value if m.data.wind_speed else 0,
-                "ceiling": 9999,
-                "raw_metar": m.raw,
-                "raw_taf": t.raw
+                "ceiling": 9999, "raw_metar": m.raw, "raw_taf": t.raw
             }
             if m.data.clouds:
                 for layer in m.data.clouds:
@@ -64,9 +66,9 @@ def get_fleet_weather(airport_dict):
         except: continue
     return results
 
-# 3. COMPLETE 2026 FLEET DATABASE
+# 3. FULL 2026 FLEET DATABASE
 airports = {
-    # --- CITYFLYER ---
+    # CITYFLYER
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
     "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
     "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
@@ -88,7 +90,7 @@ airports = {
     "IBZ": {"icao": "LEIB", "name": "Ibiza", "fleet": "Cityflyer", "rwy": 60, "lat": 38.873, "lon": 1.373},
     "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
     "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
-    # --- EUROFLYER ---
+    # EUROFLYER
     "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
     "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
     "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
@@ -123,15 +125,20 @@ def get_xwind(w_dir, w_spd, rwy):
 # PULL CACHED DATA
 weather_data = get_fleet_weather(airports)
 
-# --- UI HEADER ---
+# HEADER
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
-# SIDEBAR
+# SIDEBAR STYLING
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/en/thumb/d/de/British_Airways_Logo.svg/1024px-British_Airways_Logo.svg.png", use_container_width=True)
+st.sidebar.markdown("### Fleet Selection")
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
+
+map_theme = st.sidebar.radio("Map Theme", ["Light Mode", "Dark Mode"])
+tile_style = "CartoDB positron" if map_theme == "Light Mode" else "CartoDB dark_matter"
+
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 
-# PROCESS FILTERED DATA
+# PROCESS DATA
 active_alerts = {}
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 map_markers = []
@@ -165,8 +172,7 @@ for iata, data in weather_data.items():
             counts[info['fleet']]["green"] += 1
         map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "raw": data['raw_metar']})
 
-# 8. DASHBOARD LAYOUT
-# Fix alignment of status columns
+# ALIGN STATUS BAR
 stat_col1, stat_col2 = st.columns(2)
 with stat_col1:
     st.metric("Cityflyer Fleet Status", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
@@ -175,6 +181,7 @@ with stat_col2:
 
 st.markdown("---")
 
+# MAIN MAP AND ALERTS
 m_col, a_col = st.columns([3.5, 1])
 
 with m_col:
@@ -183,7 +190,7 @@ with m_col:
         target = airports[st.session_state.investigate_iata]
         map_center = [target["lat"], target["lon"]]; zoom = 10
     
-    m = folium.Map(location=map_center, zoom_start=zoom, tiles="CartoDB dark_matter")
+    m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
     for mkr in map_markers:
         is_sel = mkr['iata'] == st.session_state.investigate_iata
         folium.CircleMarker(
@@ -197,7 +204,6 @@ with m_col:
 with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
     for iata, d in active_alerts.items():
-        # Red alerts use primary (red), Amber use secondary (styled orange via CSS)
         btn_kind = "primary" if d['type'] == "red" else "secondary"
         if st.button(f"{iata}: Investigating Issues", key=f"btn_{iata}", type=btn_kind):
             st.session_state.investigate_iata = iata
@@ -212,6 +218,6 @@ with a_col:
             <hr><small>{d['metar']}</small>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Close Analysis"):
+        if st.button("Close Analysis", key="close_btn"):
             st.session_state.investigate_iata = "None"
             st.rerun()
