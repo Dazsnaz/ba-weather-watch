@@ -8,28 +8,25 @@ from datetime import datetime
 # 1. PAGE CONFIG & BRANDING
 st.set_page_config(layout="wide", page_title="BA OCC Weather Dashboard", page_icon="✈️")
 
+# CSS to style the buttons specifically by color
 st.markdown("""
     <style>
     .ba-header { background-color: #002366; padding: 20px; color: white; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-family: 'Arial', sans-serif; }
-    /* Custom Styling for Clickable Alert Buttons */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 4px;
-        border: none;
-        color: white;
-        text-align: left;
-        padding: 12px;
-        margin-bottom: 5px;
-        font-weight: bold;
-    }
-    /* Hover effects to show they are clickable */
-    div.stButton > button:hover { opacity: 0.8; color: white; border: 1px solid white; }
+    
+    /* TARGETING BUTTONS FOR COLORS */
+    div.stButton > button:first-child { height: 3em; width: 100%; border: none; color: white; font-weight: bold; margin-bottom: 5px; }
+    
+    /* Specific classes for color overrides via Label matching or keys is limited in base Streamlit, 
+       so we use a trick with markdown for the visual and a hidden button for the logic if needed, 
+       but for this version, we will use the 'type' parameter or custom CSS mapping. */
+    
+    .reason-box { background-color: #ffffff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-top: 10px; border-top: 5px solid #002366; color: black; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FULL 2026 FLEET DATABASE (Verified Complete)
+# 2. FULL 2026 FLEET DATABASE
 airports = {
-    # --- CITYFLYER ---
+    # CITYFLYER
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
     "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
     "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
@@ -51,8 +48,7 @@ airports = {
     "IBZ": {"icao": "LEIB", "name": "Ibiza", "fleet": "Cityflyer", "rwy": 60, "lat": 38.873, "lon": 1.373},
     "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
     "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
-
-    # --- EUROFLYER ---
+    # EUROFLYER
     "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
     "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
     "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
@@ -64,7 +60,6 @@ airports = {
     "NCE": {"icao": "LFMN", "name": "Nice", "fleet": "Euroflyer", "rwy": 40, "lat": 43.665, "lon": 7.215},
     "TRN": {"icao": "LIMF", "name": "Turin", "fleet": "Euroflyer", "rwy": 360, "lat": 45.202, "lon": 7.649},
     "VRN": {"icao": "LIPX", "name": "Verona", "fleet": "Euroflyer", "rwy": 40, "lat": 45.396, "lon": 10.888},
-    "ALG": {"icao": "DAAG", "name": "Algiers", "fleet": "Euroflyer", "rwy": 270, "lat": 36.691, "lon": 3.215},
     "ALC": {"icao": "LEAL", "name": "Alicante", "fleet": "Euroflyer", "rwy": 100, "lat": 38.282, "lon": -0.558},
     "SVQ": {"icao": "LEZL", "name": "Seville", "fleet": "Euroflyer", "rwy": 270, "lat": 37.418, "lon": -5.893},
     "RAK": {"icao": "GMMX", "name": "Marrakesh", "fleet": "Euroflyer", "rwy": 100, "lat": 31.606, "lon": -8.036},
@@ -78,7 +73,7 @@ airports = {
     "LPA": {"icao": "GCLP", "name": "Gran Canaria", "fleet": "Euroflyer", "rwy": 30, "lat": 27.931, "lon": -15.386},
     "IVL": {"icao": "EFIV", "name": "Ivalo", "fleet": "Euroflyer", "rwy": 40, "lat": 68.607, "lon": 27.405},
     "MLA": {"icao": "LMML", "name": "Malta", "fleet": "Euroflyer", "rwy": 310, "lat": 35.857, "lon": 14.477},
-    "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774}
+    "FNC": {"icao": "LPMA", "name": "Madeira", "fleet": "Euroflyer", "rwy": 50, "lat": 32.694, "lon": -16.774},
 }
 
 def get_xwind(w_dir, w_spd, rwy):
@@ -88,21 +83,18 @@ def get_xwind(w_dir, w_spd, rwy):
 # --- UI HEADER ---
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar Init
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/en/thumb/d/de/British_Airways_Logo.svg/1200px-British_Airways_Logo.svg.png", use_container_width=True)
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
-map_theme = st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"])
-tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 
-# Initialize Session State for Investigator
 if 'investigate_iata' not in st.session_state:
     st.session_state.investigate_iata = "None"
 
+# Data Processing
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 active_alerts = {}
 map_markers = []
 
-# Process Weather Data
 for iata, info in airports.items():
     if info['fleet'] in fleet_filter:
         try:
@@ -123,71 +115,68 @@ for iata, info in airports.items():
             color = "#008000"
             alert_type = None
 
-            if xw > 25: reasons.append(f"Excessive X-Wind ({xw}kt)"); color = "#d6001a"; alert_type = "red"
-            if vis < 800: reasons.append(f"Low Visibility ({vis}m)"); color = "#d6001a"; alert_type = "red"
-            if ceiling < 200: reasons.append(f"Low Ceiling ({ceiling}ft)"); color = "#d6001a"; alert_type = "red"
+            if xw > 25: reasons.append(f"X-Wind {xw}kt"); color = "#d6001a"; alert_type = "red"
+            if vis < 800: reasons.append(f"Vis {vis}m"); color = "#d6001a"; alert_type = "red"
+            if ceiling < 200: reasons.append(f"Ceiling {ceiling}ft"); color = "#d6001a"; alert_type = "red"
             
             if not alert_type:
                 if xw > 18 or vis < 1500 or ceiling < 500:
                     color = "#eb8f34"; alert_type = "amber"
                     if xw > 18: reasons.append(f"Marginal X-Wind ({xw}kt)")
-                    if vis < 1500: reasons.append(f"LVO Conditions ({vis}m)")
+                    if vis < 1500: reasons.append(f"LVO Vis ({vis}m)")
                     if ceiling < 500: reasons.append(f"LVO Ceiling ({ceiling}ft)")
             
             if iata == "IVL" and temp <= -25:
                 color = "#005a9c"; alert_type = "arctic"; reasons.append(f"Extreme Cold ({temp}°C)")
 
             if alert_type:
-                active_alerts[iata] = {"type": alert_type, "reasons": reasons, "metar": metar.raw}
-                counts[info['fleet']][ "red" if alert_type=="red" else "orange"] += 1
+                active_alerts[iata] = {"type": alert_type, "reasons": reasons, "metar": metar.raw, "color": color}
+                counts[info['fleet']]["red" if alert_type=="red" else "orange"] += 1
             else:
                 counts[info['fleet']]["green"] += 1
 
             map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "name": info['name'], "temp": temp, "xw": xw, "ceiling": ceiling, "raw": metar.raw})
         except: continue
 
-# Map View Settings
+# Map Update Logic
 map_center = [48.0, 5.0]; zoom = 4
-if st.session_state.investigate_iata != "None":
+if st.session_state.investigate_iata in airports:
     target = airports[st.session_state.investigate_iata]
     map_center = [target["lat"], target["lon"]]; zoom = 10
 
-m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
+m = folium.Map(location=map_center, zoom_start=zoom, tiles="CartoDB dark_matter")
 for mkr in map_markers:
+    is_sel = mkr['iata'] == st.session_state.investigate_iata
     folium.CircleMarker(
         location=[mkr['lat'], mkr['lon']],
-        radius=12 if mkr['iata'] == st.session_state.investigate_iata else (6 if zoom < 6 else 12),
+        radius=14 if is_sel else (6 if zoom < 6 else 10),
         color=mkr['color'], fill=True, fill_opacity=0.9,
-        popup=folium.Popup(f"<b>{mkr['iata']}</b><br>{mkr['raw']}", max_width=300, show=(mkr['iata'] == st.session_state.investigate_iata))
+        popup=folium.Popup(f"<b>{mkr['iata']}</b><br>{mkr['raw']}", max_width=300, show=is_sel)
     ).add_to(m)
 
 # UI RENDER
-c1, c2 = st.columns(2)
-with c1: st.metric("Cityflyer Fleet", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
-with c2: st.metric("Euroflyer Fleet", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
+st.columns(2)[0].metric("Cityflyer", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
+st.columns(2)[1].metric("Euroflyer", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
 
-st.markdown("---")
 m_col, a_col = st.columns([3.5, 1])
-with m_col: st_folium(m, width=1100, height=750, key="occ_v_clickable")
+with m_col: st_folium(m, width=1100, height=750, key="occ_map_main")
 with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
-    # Clickable Buttons
     for iata, data in active_alerts.items():
-        btn_color = "#d6001a" if data["type"] == "red" else "#eb8f34" if data["type"] == "amber" else "#005a9c"
-        if st.button(f"{iata}: Investigating Issues", key=f"btn_{iata}", help="Click to open analysis"):
+        # Using markdown with a link trick to simulate a clickable colored div
+        if st.button(f"{iata}: {data['type'].upper()}", key=f"btn_{iata}", use_container_width=True, type="primary" if data['type']=='red' else "secondary"):
             st.session_state.investigate_iata = iata
             st.rerun()
     
-    if st.session_state.investigate_iata != "None" and st.session_state.investigate_iata in active_alerts:
-        data = active_alerts[st.session_state.investigate_iata]
+    if st.session_state.investigate_iata in active_alerts:
+        d = active_alerts[st.session_state.investigate_iata]
         st.markdown(f"""
-        <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:5px; margin-top:10px; border-top:5px solid #002366; color:black;">
-            <h4 style="margin-top:0;">{st.session_state.investigate_iata} Analysis</h4>
-            <ul>{"".join([f"<li>{r}</li>" for r in data['reasons']])}</ul>
-            <hr><small><b>METAR:</b> {data['metar']}</small><br>
-            <button onclick="window.location.reload();" style="margin-top:10px; border:none; background:#eee; padding:5px; border-radius:3px; cursor:pointer;">Clear Analysis</button>
+        <div class="reason-box">
+            <h4 style="margin:0;">{st.session_state.investigate_iata} Analysis</h4>
+            <ul style="font-size:14px; margin-top:10px;">{"".join([f"<li>{r}</li>" for r in d['reasons']])}</ul>
+            <hr><small>{d['metar']}</small>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Reset View"):
+        if st.button("Close Analysis"):
             st.session_state.investigate_iata = "None"
             st.rerun()
