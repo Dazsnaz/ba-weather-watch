@@ -17,7 +17,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FULL 2026 FLEET DATABASE
+# 2. COMPLETE 2026 FLEET DATABASE
 airports = {
     # --- CITYFLYER ---
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
@@ -75,55 +75,30 @@ def get_xwind(w_dir, w_spd, rwy):
     if not w_dir or not w_spd: return 0
     return round(abs(w_spd * math.sin(math.radians(w_dir - rwy))), 1)
 
-def check_taf_trends(taf_obj):
-    warnings = []
-    trend_keys = ["TEMPO", "PROB30", "PROB40", "BECMG"]
-    for line in taf_obj.data.forecast:
-        raw = line.raw
-        if any(key in raw for key in trend_keys):
-            vis = line.visibility.value if line.visibility else 9999
-            ceiling = 9999
-            if line.clouds:
-                for layer in line.clouds:
-                    if layer.type in ['BKN', 'OVC'] and layer.base:
-                        ceiling = min(ceiling, layer.base * 100)
-            if vis < 1500 or ceiling < 500:
-                warnings.append(f"Trend: {raw[:15]}...")
-    return warnings
-
 # --- UI HEADER ---
 st.markdown(f'<div class="ba-header"><div>OCC WEATHER DASHBOARD</div><div>{datetime.now().strftime("%d %b %Y | %H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/en/thumb/d/de/British_Airways_Logo.svg/1200px-British_Airways_Logo.svg.png", use_container_width=True)
 fleet_filter = st.sidebar.multiselect("Active Fleet", ["Cityflyer", "Euroflyer"], default=["Cityflyer", "Euroflyer"])
-search_iata = st.sidebar.selectbox("Jump to Airport", ["Select..."] + sorted([k for k, v in airports.items() if v['fleet'] in fleet_filter]))
-op_notes = st.sidebar.text_area("Operational Notes", "Normal Ops.")
-
 map_theme = st.sidebar.radio("Map Theme", ["Dark Mode", "Light Mode"])
 tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 
-map_center = [48.0, 5.0]; zoom = 4
-if search_iata != "Select...":
-    map_center = [airports[search_iata]["lat"], airports[search_iata]["lon"]]; zoom = 10
-
-m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
+# Data Containers
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
 alerts = []
+map_markers = []
 
-# Process Weather
+# Process Data
 for iata, info in airports.items():
     if info['fleet'] in fleet_filter:
         try:
             metar = Metar(info['icao']); metar.update()
-            taf = Taf(info['icao']); taf.update()
-            
             temp = metar.data.temperature.value if metar.data.temperature else 0
             vis = metar.data.visibility.value if metar.data.visibility else 9999
             w_dir = metar.data.wind_direction.value if metar.data.wind_direction else 0
             w_spd = metar.data.wind_speed.value if metar.data.wind_speed else 0
             xw = get_xwind(w_dir, w_spd, info['rwy'])
-            raw_metar = metar.raw
             
             ceiling = 9999
             if metar.data.clouds:
@@ -131,54 +106,71 @@ for iata, info in airports.items():
                     if layer.type in ['BKN', 'OVC'] and layer.base:
                         ceiling = min(ceiling, layer.base * 100)
 
-            trend_warnings = check_taf_trends(taf)
-            deice_codes = ["SN", "FZ", "IC", "PL", "SG", "GR"]
-            is_deice = any(code in raw_metar for code in deice_codes)
-
-            # --- COLOR LOGIC ---
             color = "#008000"
+            alert_type = None
+            msg = ""
+
             if xw > 25 or vis < 800 or ceiling < 200:
-                color = "#d6001a"
-                alerts.append({"type": "red", "msg": f"{iata}: BELOW MINIMA"})
+                color = "#d6001a"; alert_type = "red"; msg = "BELOW MINIMA"
                 counts[info['fleet']]["red"] += 1
             elif iata == "IVL" and temp <= -25:
-                color = "#005a9c"
-                alerts.append({"type": "arctic", "msg": f"❄️ {iata}: COLD ALERT ({temp}°C)"})
+                color = "#005a9c"; alert_type = "arctic"; msg = f"EXTREME COLD ({temp}°C)"
                 counts[info['fleet']]["orange"] += 1
-            elif is_deice:
-                color = "#eb8f34"
-                alerts.append({"type": "amber", "msg": f"🧊 {iata}: DE-ICE REQ ({raw_metar[:15]})"})
-                counts[info['fleet']]["orange"] += 1
-            elif xw > 18 or vis < 1500 or ceiling < 500 or trend_warnings:
-                color = "#eb8f34"
-                alerts.append({"type": "amber", "msg": f"{iata}: MARGINAL / TREND"})
+            elif xw > 18 or vis < 1500 or ceiling < 500:
+                color = "#eb8f34"; alert_type = "amber"; msg = "MARGINAL / LVO"
                 counts[info['fleet']]["orange"] += 1
             else:
                 counts[info['fleet']]["green"] += 1
 
-            popup_html = f"""
-            <div style="width: 450px; font-family: Arial; padding: 10px; background-color: white;">
-                <h3 style="color: #002366; border-bottom: 2px solid #002366;">{info['name']} ({iata})</h3>
-                <b>Conditions:</b> {temp}°C | XW {xw}kt | CIG {ceiling}ft<br>
-                <div style="margin-top:10px; padding:8px; background:#f0f0f0; font-family:monospace; font-size:11px;">
-                    {raw_metar}<br><br>{taf.raw}
-                </div>
-            </div>"""
-            
-            # Dynamic circle sizing based on zoom level
-            radius = 6 if zoom < 6 else 14
-            
-            folium.CircleMarker(location=[info['lat'], info['lon']], radius=radius, 
-                                color=color, fill=True, fill_opacity=0.9,
-                                popup=folium.Popup(popup_html, max_width=450)).add_to(m)
+            if alert_type:
+                alerts.append({"iata": iata, "type": alert_type, "msg": f"{iata}: {msg}"})
+
+            map_markers.append({
+                "iata": iata, "lat": info['lat'], "lon": info['lon'], 
+                "color": color, "name": info['name'], "temp": temp, 
+                "xw": xw, "ceiling": ceiling, "raw": metar.raw
+            })
         except: continue
 
-# DISPLAY UI
-m1, m2 = st.columns([3.5, 1])
-with m1: st_folium(m, width=1100, height=750, key="occ_v_final")
-with m2:
+# --- ALERT INVESTIGATOR ---
+st.sidebar.markdown("---")
+investigate = st.sidebar.selectbox("🚨 Alert Investigator", ["Select Alert..."] + [a['msg'] for a in alerts])
+
+map_center = [48.0, 5.0]; zoom = 4
+selected_iata = None
+
+if investigate != "Select Alert...":
+    selected_iata = investigate.split(":")[0]
+    target = airports[selected_iata]
+    map_center = [target["lat"], target["lon"]]; zoom = 10
+
+m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
+
+for mkr in map_markers:
+    popup_html = f"""
+    <div style="width: 350px; font-family: Arial; background: white; padding: 10px; border-radius: 5px;">
+        <h4 style="color: #002366; border-bottom: 2px solid #002366; margin-top: 0;">{mkr['name']} ({mkr['iata']})</h4>
+        <b>Temp:</b> {mkr['temp']}°C | <b>X-Wind:</b> {mkr['xw']}kt | <b>CIG:</b> {mkr['ceiling']}ft<br>
+        <div style="margin-top:10px; padding:8px; background:#f0f0f0; font-family:monospace; font-size:11px; border-radius: 3px;">{mkr['raw']}</div>
+    </div>"""
+    
+    folium.CircleMarker(
+        location=[mkr['lat'], mkr['lon']],
+        radius=12 if mkr['iata'] == selected_iata else (6 if zoom < 6 else 12),
+        color=mkr['color'], fill=True, fill_opacity=0.9,
+        popup=folium.Popup(popup_html, max_width=400, show=(mkr['iata'] == selected_iata))
+    ).add_to(m)
+
+# UI RENDER
+c1, c2 = st.columns(2)
+with c1: st.metric("Cityflyer Fleet", f"{counts['Cityflyer']['green']}G | {counts['Cityflyer']['orange']}A | {counts['Cityflyer']['red']}R")
+with c2: st.metric("Euroflyer Fleet", f"{counts['Euroflyer']['green']}G | {counts['Euroflyer']['orange']}A | {counts['Euroflyer']['red']}R")
+
+st.markdown("---")
+m_col, a_col = st.columns([3.5, 1])
+with m_col: st_folium(m, width=1100, height=750, key="occ_v_interactive")
+with a_col:
     st.markdown("#### ⚠️ Operational Alerts")
     for a in alerts:
-        cls = f"alert-card-{a['type']}"
-        st.markdown(f'<div class="{cls}">{a["msg"]}</div>', unsafe_allow_html=True)
-    st.info(f"Notes: {op_notes}")
+        st.markdown(f'<div class="alert-card-{a["type"]}">{a["msg"]}</div>', unsafe_allow_html=True)
+    st.info("Notes: No active slot delays.")
