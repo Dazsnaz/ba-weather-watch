@@ -13,7 +13,6 @@ st.markdown("""
     <style>
     html, body, [class*="st-"], div, p, h1, h2, h3, h4, label { color: white !important; }
     
-    /* SCROLLING ALERT FLASH */
     .marquee {
         width: 100%; background-color: #d6001a; color: white; white-space: nowrap;
         overflow: hidden; box-sizing: border-box; padding: 10px; font-weight: bold;
@@ -36,9 +35,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. COMPLETE FLEET DATABASE
+# 3. FULL FLEET DATABASE (42 Airports)
 airports = {
-    # --- CITYFLYER (CF) ---
     "LCY": {"icao": "EGLC", "name": "London City", "fleet": "Cityflyer", "rwy": 270, "lat": 51.505, "lon": 0.055},
     "AMS": {"icao": "EHAM", "name": "Amsterdam", "fleet": "Cityflyer", "rwy": 180, "lat": 52.313, "lon": 4.764},
     "RTM": {"icao": "EHRD", "name": "Rotterdam", "fleet": "Cityflyer", "rwy": 240, "lat": 51.957, "lon": 4.440},
@@ -60,7 +58,6 @@ airports = {
     "IBZ": {"icao": "LEIB", "name": "Ibiza", "fleet": "Cityflyer", "rwy": 60, "lat": 38.873, "lon": 1.373},
     "PMI": {"icao": "LEPA", "name": "Palma", "fleet": "Cityflyer", "rwy": 240, "lat": 39.551, "lon": 2.738},
     "FAO": {"icao": "LPFR", "name": "Faro", "fleet": "Cityflyer", "rwy": 280, "lat": 37.017, "lon": -7.965},
-    # --- EUROFLYER (EF) ---
     "LGW": {"icao": "EGKK", "name": "Gatwick", "fleet": "Euroflyer", "rwy": 260, "lat": 51.148, "lon": -0.190},
     "JER": {"icao": "EGJJ", "name": "Jersey", "fleet": "Euroflyer", "rwy": 260, "lat": 49.208, "lon": -2.195},
     "OPO": {"icao": "LPPR", "name": "Porto", "fleet": "Euroflyer", "rwy": 350, "lat": 41.242, "lon": -8.678},
@@ -130,7 +127,7 @@ if st.sidebar.button("🔄 Manual Data Refresh"):
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if search_iata in airports: st.session_state.investigate_iata = search_iata
 
-# PROCESS DATA
+# PROCESS ALERTS
 active_alerts = {}
 red_airports = []
 counts = {"Cityflyer": {"green": 0, "orange": 0, "red": 0}, "Euroflyer": {"green": 0, "orange": 0, "red": 0}}
@@ -159,7 +156,6 @@ for iata, data in weather_data.items():
 
 # --- UI RENDER ---
 
-# ALERT FLASH (Only shows if 3+ airports are Red)
 if len(red_airports) >= 3:
     alert_text = "  |  ".join(red_airports)
     st.markdown(f'<div class="marquee"><span>CRITICAL NETWORK ALERTS: {alert_text}</span></div>', unsafe_allow_html=True)
@@ -172,7 +168,7 @@ c2.metric("Euroflyer Fleet Status", f"{counts['Euroflyer']['green']}G | {counts[
 
 st.markdown("---")
 
-# MAP SECTION
+# FULL WIDTH MAP
 map_center = [48.0, 5.0]; zoom = 4
 if st.session_state.investigate_iata in airports:
     target = airports[st.session_state.investigate_iata]
@@ -181,13 +177,27 @@ if st.session_state.investigate_iata in airports:
 tile_style = "CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"
 m = folium.Map(location=map_center, zoom_start=zoom, tiles=tile_style)
 for mkr in map_markers:
-    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=f"{mkr['iata']}: {mkr['metar']}").add_to(m)
-st_folium(m, width=1400, height=600, key="full_width_map_v10")
+    # DUAL METAR/TAF LANDSCAPE POPUP
+    popup_html = f"""<div style="width: 550px; color: black !important; font-family: sans-serif;">
+        <h4 style="color: #002366; border-bottom: 2px solid #002366; margin: 0 0 10px 0;">{mkr['iata']} Tech Data</h4>
+        <div style="display: flex; gap: 10px;">
+            <div style="flex: 1; background: #f4f4f4; padding: 10px; border-radius: 4px; border: 1px solid #ddd;">
+                <b style="color: #d6001a;">CURRENT (METAR)</b><br>
+                <code style="font-size: 11px; display: block; margin-top: 5px;">{mkr['metar']}</code>
+            </div>
+            <div style="flex: 1; background: #f4f4f4; padding: 10px; border-radius: 4px; border: 1px solid #ddd;">
+                <b style="color: #005a9c;">FORECAST (TAF)</b><br>
+                <code style="font-size: 11px; display: block; margin-top: 5px;">{mkr['taf']}</code>
+            </div>
+        </div></div>"""
+    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=14 if mkr['iata'] == st.session_state.investigate_iata else 7, color=mkr['color'], fill=True, fill_opacity=0.9, popup=folium.Popup(popup_html, max_width=600)).add_to(m)
+
+st_folium(m, width=1400, height=600, key="v11_full_width")
 
 st.markdown("---")
 
-# ALERTS & ANALYSIS
-st.markdown("### ⚠️ Operational Alerts")
+# ALERTS SECTION
+st.markdown("### ⚠️ Active Operational Alerts")
 if active_alerts:
     alert_cols = st.columns(6) 
     for idx, (iata, d) in enumerate(active_alerts.items()):
@@ -200,12 +210,14 @@ if st.session_state.investigate_iata in active_alerts:
     d = active_alerts[st.session_state.investigate_iata]
     st.markdown(f"""
     <div class="reason-box">
-        <h3>{st.session_state.investigate_iata} Analysis</h3>
-        <p><b>Issue:</b> {d['reason']} detected. Conditions: Vis {d['vis']}m, Ceiling {d['ceiling']}ft, XW {d['xw']}kt.</p>
+        <h3>{st.session_state.investigate_iata} Operational Analysis</h3>
+        <p><b>Weather Detail:</b> {d['reason']} identified. Current Vis: {d['vis']}m | Ceiling: {d['ceiling']}ft | X-Wind: {d['xw']}kt.</p>
         <p><b>Actionable Guidance:</b> This forecast is currently below operating limits and <b>may cause diversions or ATC slots</b> due to the weather. Expect <b>long delays to the operation</b> if conditions persist.</p>
         <hr>
-        <p><b>METAR:</b> <small>{d['metar']}</small></p>
-        <p><b>TAF:</b> <small>{d['taf']}</small></p>
+        <div style="display: flex; gap: 40px;">
+            <div><b>METAR:</b> <small>{d['metar']}</small></div>
+            <div><b>TAF:</b> <small>{d['taf']}</small></div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("Close Analysis"):
