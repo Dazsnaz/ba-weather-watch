@@ -18,7 +18,7 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #002366 !important; min-width: 250px !important; }
     [data-testid="stSidebar"] .stTextInput input { color: #002366 !important; background-color: white !important; font-weight: bold; }
     
-    /* CONCISE RESPONSIVE BUTTONS */
+    /* CONCISE ALERT BUTTONS */
     .stButton > button { 
         background-color: #005a9c !important; color: white !important; border: 1px solid white !important; 
         width: 100%; text-transform: uppercase; font-size: 0.72rem !important; height: 50px !important; 
@@ -77,7 +77,7 @@ base_airports = {
     "LIN": {"icao": "LIML", "lat": 45.445, "lon": 9.277, "rwy": 360, "fleet": "Cityflyer", "spec": False},
     "MAD": {"icao": "LEMD", "lat": 40.494, "lon": -3.567, "rwy": 140, "fleet": "Cityflyer", "spec": False},
     "IBZ": {"icao": "LEIB", "lat": 38.873, "lon": 1.373, "rwy": 60, "fleet": "Cityflyer", "spec": False},
-    "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer", "spec": False},
+    "PMI": {"icao": "LEPA", "lat": 39.551, "lon": 2.738, "rwy": 240, "fleet": "Cityflyer", "spec": False}, # 
     "AGP": {"icao": "LEMG", "lat": 36.675, "lon": -4.499, "rwy": 130, "fleet": "Cityflyer", "spec": False},
     "FAO": {"icao": "LPFR", "lat": 37.017, "lon": -7.965, "rwy": 280, "fleet": "Cityflyer", "spec": False},
     "SEN": {"icao": "EGMC", "lat": 51.571, "lon": 0.701, "rwy": 230, "fleet": "Cityflyer", "spec": False},
@@ -110,13 +110,14 @@ base_airports = {
 }
 
 # 5. SESSION STATE
+if 'manual_stations' not in st.session_state: st.session_state.manual_stations = {}
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 
 # 6. SIDEBAR
 with st.sidebar:
     st.title("🛠️ COMMAND SETTINGS")
     if st.button("🔄 MANUAL DATA REFRESH"):
-        st.cache_data.clear(); st.rerun()
+        st.cache_data.clear(); st.rerun() # [cite: 23]
     st.markdown("---")
     st.markdown("✈️ **FLEET DISPLAY**")
     show_cf = st.checkbox("Cityflyer (CFE)", value=True)
@@ -126,7 +127,7 @@ with st.sidebar:
     st.markdown("📊 **FLEET X-WIND LIMITS**")
     st.markdown("""<table class="limits-table"><tr><th>FLEET</th><th>DRY</th><th>WET</th></tr><tr><td><b>A320/321</b></td><td>38 kt</td><td>33 kt</td></tr><tr><td><b>E190/170</b></td><td>30 kt</td><td>25 kt</td></tr></table>""", unsafe_allow_html=True)
 
-# 7. STABLE BACKGROUND FETCH [cite: 25-32]
+# 7. BACKGROUND FETCH [cite: 25-32]
 @st.cache_data(ttl=600)
 def get_intel_global(airport_dict):
     res = {}
@@ -176,7 +177,7 @@ def get_intel_global(airport_dict):
         except: res[iata] = {"status": "offline", "raw_m": "N/A", "raw_t": "N/A", "f_issues": []}
     return res
 
-weather_data = get_intel_global(base_airports)
+weather_data = get_intel_global({**base_airports, **st.session_state.get('manual_stations', {})})
 
 # 8. FILTER & UI LOOP [cite: 33-40]
 metar_alerts, taf_alerts, green_stations, map_markers = {}, {}, [], []
@@ -203,8 +204,7 @@ for iata, info in base_airports.items():
             if data['f_issues']:
                 p_tag = " prob" if data['f_prob'] else ""
                 forecast_str = f"{'+'.join(data['f_issues'])}{p_tag} @ {data['f_time']}"
-                t_hex = "primary" if any(x in str(data['f_issues']) for x in ["VIS", "CLOUD", "FZRA", "XWIND"]) else "secondary"
-                taf_alerts[iata] = {"type": "+".join(data['f_issues']), "time": data['f_time'], "prob": data['f_prob'], "hex": t_hex}
+                taf_alerts[iata] = {"type": "+".join(data['f_issues']), "time": data['f_time'], "prob": data['f_prob'], "hex": "primary" if any(x in str(data['f_issues']) for x in ["VIS", "CLOUD", "FZRA", "XWIND"]) else "secondary"}
                 if color == "#008000": color = "#eb8f34"
 
     if is_shown:
@@ -212,19 +212,19 @@ for iata, info in base_airports.items():
         rwy_str = f"{min(r1,r2):02d}/{max(r1,r2):02d}"
         m_bold, t_bold = bold_hazard(data.get('raw_m', 'N/A')), bold_hazard(data.get('raw_t', 'N/A'))
         
-        # v13.9 PRECISION POPUP STATUS
+        # HIGH-VISIBILITY POPUP STATUS [cite: 39-40, 43]
         popup_html = f"""
-        <div style="width:550px; color:black !important; font-family:monospace; font-size:12px;">
-            <b style="color:#002366; font-size:14px;">{iata} STATUS</b>
-            <div style="margin-top:5px; padding:5px; border-left:5px solid {color}; background:#f9f9f9;">
+        <div style="width:600px; color:black !important; font-family:monospace; font-size:14px;">
+            <b style="color:#002366; font-size:18px;">{iata} STATUS</b>
+            <div style="margin-top:8px; padding:10px; border-left:6px solid {color}; background:#f9f9f9; font-size:16px;">
                 <b style="color:#002366;">RWY {rwy_str} Live X-Wind:</b> <span style="color:{'#d6001a' if xw >= 25 else 'black'}; font-weight:bold;">{xw} KT</span><br>
                 <b>ACTUAL:</b> {actual_str}<br>
                 <b>FORECAST:</b> {forecast_str}
             </div>
             <hr>
-            <div style="display:flex; gap:10px;">
-                <div style="flex:1; background:#f0f0f0; padding:8px; border-radius:3px;"><b>METAR</b><br>{m_bold}</div>
-                <div style="flex:1; background:#f0f0f0; padding:8px; border-radius:3px;"><b>TAF</b><br>{t_bold}</div>
+            <div style="display:flex; gap:12px;">
+                <div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; font-size:14px;"><b>METAR</b><br>{m_bold}</div>
+                <div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; font-size:14px;"><b>TAF</b><br>{t_bold}</div>
             </div>
         </div>"""
         map_markers.append({"iata": iata, "lat": info['lat'], "lon": info['lon'], "color": color, "popup": popup_html})
@@ -233,8 +233,8 @@ for iata, info in base_airports.items():
 st.markdown(f'<div class="ba-header"><div>OCC WX HUD</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
 m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
 for mkr in map_markers:
-    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=7, color=mkr['color'], fill=True, popup=folium.Popup(mkr['popup'], max_width=650)).add_to(m)
-st_folium(m, width=1200, height=1200, key="map_v141")
+    folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=7, color=mkr['color'], fill=True, popup=folium.Popup(mkr['popup'], max_width=700)).add_to(m)
+st_folium(m, width=1200, height=1200, key="map_v142")
 
 # 10. RESPONSIVE CONCISE ALERTS (5-COLUMNS)
 st.markdown('<div class="section-header">🔴 Actual Alerts (METAR)</div>', unsafe_allow_html=True)
