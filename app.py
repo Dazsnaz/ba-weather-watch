@@ -9,26 +9,20 @@ from datetime import datetime
 # 1. PAGE CONFIG
 st.set_page_config(layout="wide", page_title="BA OCC Command HUD", page_icon="✈️")
 
-# 2. HUD STYLING (V25.3 - NAVY SIDEBAR & CONTRAST LOCK)
+# 2. HUD STYLING (V26.0 - TOTAL NAVY & CONTRAST LOCK)
 st.markdown("""
     <style>
-    /* 2.1 GLOBAL THEME */
     .main { background-color: #001a33 !important; }
     html, body, [class*="st-"], div, p, h1, h2, h4, label { color: white !important; }
     
-    /* 2.2 HEADER VISIBILITY */
     .ba-header { 
         background-color: #002366 !important; color: #ffffff !important; 
         padding: 20px; border-radius: 8px; margin-bottom: 20px; 
         border: 2px solid #d6001a; display: flex; justify-content: space-between;
     }
 
-    /* 2.3 SIDEBAR - RESTORED TO NAVY BLUE */
-    [data-testid="stSidebar"] { 
-        background-color: #002366 !important; 
-        min-width: 320px !important; 
-        border-right: 3px solid #d6001a; 
-    }
+    /* SIDEBAR - NAVY BLUE */
+    [data-testid="stSidebar"] { background-color: #002366 !important; min-width: 320px !important; border-right: 3px solid #d6001a; }
     [data-testid="stSidebar"] label p { color: #ffffff !important; font-weight: bold; }
 
     /* SIDEBAR BUTTON FIX */
@@ -37,34 +31,28 @@ st.markdown("""
         border: 1px solid white !important; font-weight: bold !important;
     }
 
-    /* 2.4 DROPDOWN & SELECTBOX FIX (FORCE NAVY ON WHITE) */
+    /* DROPDOWN & SELECTBOX FIX (FORCE NAVY ON WHITE) */
     div[data-testid="stSelectbox"] div[data-baseweb="select"] { background-color: white !important; }
     div[data-testid="stSelectbox"] * { color: #002366 !important; font-weight: 800 !important; }
     [data-baseweb="popover"] * { color: #002366 !important; background-color: white !important; font-weight: bold !important; }
 
-    /* 2.5 STRATEGY BRIEF - REWRITTEN FOR PERMANENT NAVY LOCK */
+    /* STRATEGY BRIEF - PERMANENT NAVY LOCK */
     .reason-box { 
-        background-color: #ffffff !important; 
-        border: 1px solid #ddd; 
-        padding: 25px; 
-        border-radius: 5px; 
-        margin-top: 20px; 
-        border-top: 10px solid #d6001a; 
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+        background-color: #ffffff !important; border: 1px solid #ddd; 
+        padding: 25px; border-radius: 5px; margin-top: 20px; 
+        border-top: 10px solid #d6001a; box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
     }
-    
-    /* Force Navy on ALL children of reason-box to stop white font inheritance */
     .reason-box * { color: #002366 !important; }
     .reason-box .alt-highlight { color: #d6001a !important; font-weight: bold !important; }
 
-    /* 2.6 ALERT TABS (RED/AMBER BUTTONS) */
+    /* ALERT TABS (RED/AMBER) */
     .stButton > button[kind="secondary"] { background-color: #eb8f34 !important; color: white !important; border: 1px solid white !important; font-weight: bold !important; }
     .stButton > button[kind="primary"] { background-color: #d6001a !important; color: white !important; border: 1px solid white !important; font-weight: bold !important; }
 
-    /* 2.7 HANDOVER LOG FIX */
+    /* HANDOVER LOG FIX */
     [data-testid="stTextArea"] textarea { color: #002366 !important; background-color: #ffffff !important; font-weight: bold !important; font-family: 'Courier New', monospace !important; }
 
-    /* 2.8 SECTION HEADERS */
+    /* SECTION HEADERS */
     .section-header { color: #ffffff !important; background-color: #002366; padding: 10px; border-left: 10px solid #d6001a; font-weight: bold; font-size: 1.5rem; margin-top: 30px; }
     .leaflet-tooltip { background: white !important; border: 2px solid #002366 !important; border-radius: 5px !important; opacity: 1 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important; }
     </style>
@@ -158,7 +146,7 @@ with st.sidebar:
     show_ef = st.checkbox("Euroflyer (EFW)", value=True)
     map_theme = st.radio("MAP THEME", ["Dark Mode", "Light Mode"])
 
-# 7. BACKGROUND FETCH (V14.2 ENGINE + STANDALONE LOGIC)
+# 7. BACKGROUND FETCH (REFINED SCANNING LOGIC)
 @st.cache_data(ttl=600)
 def get_intel_global(airport_dict):
     res = {}
@@ -257,7 +245,7 @@ st.markdown(f'<div class="ba-header"><div>OCC WINTER HUD</div><div>{datetime.now
 m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
 for mkr in map_markers:
     folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=7, color=mkr['color'], fill=True, popup=folium.Popup(mkr['popup'], max_width=650), tooltip=folium.Tooltip(mkr['popup'], direction='top', sticky=False)).add_to(m)
-st_folium(m, width=1200, height=1200, key="map_final_v253")
+st_folium(m, width=1200, height=1200, key="map_v26")
 
 # 10. ALERTS
 st.markdown('<div class="section-header">🔴 Actual Alerts (METAR)</div>', unsafe_allow_html=True)
@@ -274,7 +262,7 @@ if taf_alerts:
             p_tag = " prob" if d['prob'] else ""
             if st.button(f"{iata} {d['time']} {d['type']}{p_tag}", key=f"f_{iata}", type="secondary"): st.session_state.investigate_iata = iata
 
-# 11. STRATEGY BRIEF (v25.2 ULTIMATE CONTRAST LOCK)
+# 11. STRATEGY BRIEF
 if st.session_state.investigate_iata != "None":
     iata = st.session_state.investigate_iata
     d, info = weather_data.get(iata, {}), base_airports.get(iata, {"rwy": 0, "lat": 0, "lon": 0})
@@ -286,29 +274,11 @@ if st.session_state.investigate_iata != "None":
             dist = calculate_dist(info['lat'], info['lon'], base_airports[g]['lat'], base_airports[g]['lon'])
             if dist < min_dist: min_dist = dist; alt_iata = g
             
-    st.markdown(f"""
-    <div class="reason-box">
-        <h3>{iata} Strategy Brief</h3>
-        <div>
-            <p><b>Active Hazards:</b> {issue_desc}. Live X-Wind <b>{xw_val}kt</b>.</p>
-            <p><b>Strategic Alternate:</b> <span class="alt-highlight">{alt_iata}</span> at {min_dist} NM.</p>
-        </div>
-        <hr>
-        <div style="display:flex; gap:30px;">
-            <div style="flex:1; padding:15px; background:#f9f9f9; border-radius:5px; border-left:4px solid #002366;">
-                <b>LIVE METAR</b>
-                <div style="font-family:monospace; line-height: 1.4 !important;">{bold_hazard(d.get('raw_m'))}</div>
-            </div>
-            <div style="flex:1; padding:15px; background:#f9f9f9; border-radius:5px; border-left:4px solid #002366;">
-                <b>LIVE TAF</b>
-                <div style="font-family:monospace; line-height: 1.4 !important;">{bold_hazard(d.get('raw_t'))}</div>
-            </div>
-        </div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="reason-box"><h3>{iata} Strategy Brief</h3><div><p><b>Active Hazards:</b> {issue_desc}. Live X-Wind <b>{xw_val}kt</b>.</p><p><b>Strategic Alternate:</b> <span class="alt-highlight">{alt_iata}</span> at {min_dist} NM.</p></div><hr><div style="display:flex; gap:30px;"><div style="flex:1; padding:15px; background:#f9f9f9; border-radius:5px; border-left:4px solid #002366;"><b>LIVE METAR</b><div style="font-family:monospace; line-height: 1.4 !important;">{bold_hazard(d.get('raw_m'))}</div></div><div style="flex:1; padding:15px; background:#f9f9f9; border-radius:5px; border-left:4px solid #002366;"><b>LIVE TAF</b><div style="font-family:monospace; line-height: 1.4 !important;">{bold_hazard(d.get('raw_t'))}</div></div></div></div>""", unsafe_allow_html=True)
     if st.button("Close Strategy Brief"): st.session_state.investigate_iata = "None"; st.rerun()
 
 # 12. HANDOVER LOG
 st.markdown('<div class="section-header">📝 Shift Handover Log</div>', unsafe_allow_html=True)
 h_txt = f"HANDOVER {datetime.now().strftime('%H:%M')}Z\n" + "="*35 + "\n"
 for iata, d in taf_alerts.items(): h_txt += f"{iata}: {d['type']} ({d['time']})\n"
-st.text_area("Handover Report:", value=h_txt, height=200, key="handover_final_restored", label_visibility="collapsed")
+st.text_area("Handover Report:", value=h_txt, height=200, key="handover_log_final", label_visibility="collapsed")
