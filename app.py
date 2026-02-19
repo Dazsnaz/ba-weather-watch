@@ -5,6 +5,7 @@ from avwx import Metar, Taf
 import math
 import re
 import io
+import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 
@@ -99,12 +100,30 @@ def load_schedule_robust(file_bytes):
                 break
         df = pd.read_csv(io.StringIO(file_bytes.decode('utf-8')), skiprows=skip_r, on_bad_lines='skip')
         df = df.dropna(subset=['FLT'])
-        # Parse Dates safely into Python datetime.date objects for calendar picker
         df['DATE_OBJ'] = pd.to_datetime(df['DATE'], format='%d/%m/%y', errors='coerce').dt.date
         df['DATE_OBJ'] = df['DATE_OBJ'].fillna(pd.to_datetime(df['DATE'], dayfirst=True, errors='coerce').dt.date)
         return df
     except Exception as e:
         return pd.DataFrame()
+
+# LIVE RADAR ENGINE
+@st.cache_data(ttl=20)
+def fetch_raw_radar():
+    fleet = []
+    try:
+        url = "https://opensky-network.org/api/states/all?lamin=30.0&lomin=-20.0&lamax=65.0&lomax=30.0"
+        data = requests.get(url, timeout=5).json()
+        if "states" in data and data["states"]:
+            for s in data["states"]:
+                call = (s[1] or "").strip().upper()
+                if call.startswith("CFE") or call.startswith("EFW"):
+                    fleet.append({
+                        "call": call, "lat": s[6], "lon": s[5], 
+                        "type": "CFE" if call.startswith("CFE") else "EFW",
+                        "alt": round((s[7] or 0) * 3.28084), "hdg": s[10] or 0
+                    })
+    except: pass
+    return fleet
 
 # 4. MASTER DATABASE (FULL 47 STATIONS)
 base_airports = {
@@ -167,18 +186,15 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload Daily Flight Schedule (CSV)", type=["csv"])
     
     flight_schedule = pd.DataFrame()
-    # Default calendar format date picker
     selected_date = st.date_input("📅 Select Operations Date:", value=datetime.now().date())
     active_stations = set()
     
     if uploaded_file is not None:
         flight_schedule = load_schedule_robust(uploaded_file.getvalue())
         if not flight_schedule.empty and 'DATE_OBJ' in flight_schedule.columns:
-            # Filter schedule down to the date picked on the calendar
             flight_schedule = flight_schedule[flight_schedule['DATE_OBJ'] == selected_date]
             if not flight_schedule.empty:
                 st.success(f"Loaded {len(flight_schedule)} flights for {selected_date.strftime('%d %b %Y')}")
-                # Extract only the stations active on this specific day
                 active_stations = set(flight_schedule['DEP'].dropna()) | set(flight_schedule['ARR'].dropna())
             else:
                 st.warning(f"No flights found for {selected_date.strftime('%d %b %Y')}. Displaying full network.")
@@ -191,15 +207,18 @@ with st.sidebar:
     if uploaded_file is not None and active_stations:
         display_airports = {k: v for k, v in base_airports.items() if k in active_stations}
     else:
-        display_airports = base_airports # Fallback to 47 standard stations if no file or no flights
+        display_airports = base_airports
         
     st.markdown("---")
-    
     if st.button("🔄 MANUAL DATA REFRESH"):
         st.cache_data.clear()
         st.rerun()
+        
     st.markdown("---")
+    st.markdown("📡 **RADAR TRACKING**")
+    show_radar = st.checkbox("Enable Live Aircraft Radar", value=True)
     
+    st.markdown("---")
     st.markdown("🕒 **INTEL HORIZON**")
     time_horizon = st.radio("SCAN WINDOW", ["Next 6 Hours", "Next 12 Hours", "Next 24 Hours"], index=0)
     horizon_hours = 6 if "6" in time_horizon else (12 if "12" in time_horizon else 24)
@@ -220,7 +239,7 @@ with st.sidebar:
     st.markdown("---")
     map_theme = st.radio("MAP THEME", ["Dark Mode", "Light Mode"])
 
-# 6. DATA FETCH & PROCESSING (Using Dynamically Filtered Stations)
+# 6. DATA FETCH & PROCESSING
 @st.cache_data(ttl=1800)
 def get_raw_weather_master(airport_dict):
     raw_res = {}
@@ -294,6 +313,43 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
 
 weather_data = process_weather_for_horizon(raw_weather_bundle, display_airports, horizon_hours, xw_limit)
 
+# RADAR DATA MAPPING & LOOKUP LOGIC
+radar_data = []
+if show_radar:
+    raw_radar = fetch_raw_radar()
+    
+    # Build schedule dictionary for fast tooltip lookup
+    sched_dict = {}
+    if not flight_schedule.empty:
+        has_arcid = 'ARCID' in flight_schedule.columns
+        for _, r in flight_schedule.iterrows():
+            if has_arcid and pd.notna(r['ARCID']) and str(r['ARCID']).strip():
+                sched_dict[str(r['ARCID']).strip().upper()] = r
+            
+            if pd.notna(r['FLT']):
+                flt_str = str(r['FLT']).replace('BA', '').strip()
+                sched_dict[f"CFE{flt_str}"] = r
+                sched_dict[f"EFW{flt_str}"] = r
+
+    for p in raw_radar:
+        call = p['call']
+        flt, dep, arr = call, "UKN", "UKN"
+        
+        # Link Radar to Schedule
+        if call in sched_dict:
+            flt = str(sched_dict[call]['FLT'])
+            dep = str(sched_dict[call]['DEP'])
+            arr = str(sched_dict[call]['ARR'])
+
+        p['flt'] = flt
+        p['dep'] = dep
+        p['arr'] = arr
+        radar_data.append(p)
+
+# TIME LOGIC FOR SCHEDULE FILTERING
+current_utc_date = datetime.now(timezone.utc).date()
+current_utc_time_str = datetime.now(timezone.utc).strftime('%H:%M')
+
 # 7. UI LOOP & INBOUND FLIGHT INJECTION
 metar_alerts, taf_alerts, green_stations, map_markers = {}, {}, [], []
 for iata, info in display_airports.items():
@@ -334,7 +390,7 @@ for iata, info in display_airports.items():
     m_bold, t_bold = bold_hazard(data.get('raw_m', 'N/A')), bold_hazard(data.get('raw_t', 'N/A'))
     
     # ---------------------------------------------------------
-    # CSV FLIGHT INJECTION LOGIC
+    # CSV FLIGHT INJECTION LOGIC (Filters out past flights)
     # ---------------------------------------------------------
     inbound_html = ""
     if not flight_schedule.empty:
@@ -342,10 +398,18 @@ for iata, info in display_airports.items():
         if not arr_flights.empty:
             rows = ""
             for _, row in arr_flights.iterrows():
+                sta = str(row['STA']).strip()
+                flight_date = row['DATE_OBJ']
+                
+                # Filter out flights that have already arrived (if looking at today)
+                if flight_date < current_utc_date:
+                    continue
+                if flight_date == current_utc_date and sta < current_utc_time_str:
+                    continue
+                
                 flt = str(row['FLT']).strip()
                 dep = str(row['DEP']).strip()
                 arr = str(row['ARR']).strip()
-                sta = str(row['STA']).strip()
                 canc = row.get('Cancellation Reason', None)
                 
                 f_status = "SCHED"
@@ -361,30 +425,54 @@ for iata, info in display_airports.items():
                     f_color = "#eb8f34"
                     
                 rows += f"<tr style='border-bottom: 1px solid #ddd;'><td style='color:{f_color}; font-weight:bold; padding:4px;'>{f_status}</td><td style='padding:4px;'>{flt}</td><td style='padding:4px;'>{dep}</td><td style='padding:4px;'>{arr}</td><td style='padding:4px;'>{sta}</td></tr>"
-                
-            inbound_html = f"""
-            <div style='margin-top:15px; border-top: 2px solid #002366; padding-top:10px;'>
-                <b style='color:#002366; font-size:14px;'>🛬 INBOUND SCHEDULE ({selected_date.strftime('%d/%m/%Y')})</b>
-                <div style='max-height: 200px; overflow-y: auto; margin-top:5px; border: 1px solid #ccc; background: #fff;'>
-                    <table style='width:100%; text-align:left; font-size:12px; border-collapse: collapse; color: #000;'>
-                        <tr style='background:#002366; color:#fff;'>
-                            <th style='padding:5px;'>Status</th><th style='padding:5px;'>FLT</th><th style='padding:5px;'>DEP</th><th style='padding:5px;'>ARR</th><th style='padding:5px;'>STA</th>
-                        </tr>
-                        {rows}
-                    </table>
+            
+            if rows: # Only show the table if there are actually future flights left
+                inbound_html = f"""
+                <div style='margin-top:15px; border-top: 2px solid #002366; padding-top:10px;'>
+                    <b style='color:#002366; font-size:14px;'>🛬 YET TO ARRIVE ({selected_date.strftime('%d/%m/%Y')})</b>
+                    <div style='max-height: 200px; overflow-y: auto; margin-top:5px; border: 1px solid #ccc; background: #fff;'>
+                        <table style='width:100%; text-align:left; font-size:12px; border-collapse: collapse; color: #000;'>
+                            <tr style='background:#002366; color:#fff;'>
+                                <th style='padding:5px;'>Status</th><th style='padding:5px;'>FLT</th><th style='padding:5px;'>DEP</th><th style='padding:5px;'>ARR</th><th style='padding:5px;'>STA</th>
+                            </tr>
+                            {rows}
+                        </table>
+                    </div>
                 </div>
-            </div>
-            """
+                """
     
     shared_content = f"""<div style="width:580px; color:black !important; font-family:monospace; font-size:14px; background:white; padding:15px; border-radius:5px;"><b style="color:#002366; font-size:18px;">{iata} STATUS {trend_icon}</b><div style="margin-top:8px; padding:10px; border-left:6px solid {color}; background:#f9f9f9; font-size:16px;"><b style="color:#002366;">{rwy_text} X-Wind:</b> <b>{cur_xw} KT</b><br><b>ACTUAL:</b> {"/".join(m_issues) if m_issues else "STABLE"}<br><b>FORECAST ({time_horizon}):</b> {"+".join(data['f_issues']) if data['f_issues'] else "NIL"}</div><hr style="border:1px solid #ddd;"><div style="display:flex; gap:12px;"><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>METAR</b><br>{m_bold}</div><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>TAF</b><br>{t_bold}</div></div>{inbound_html}</div>"""
     map_markers.append({"lat": info['lat'], "lon": info['lon'], "color": color, "content": shared_content, "iata": iata, "trend": trend_icon})
 
 # 8. UI RENDER
-st.markdown(f'<div class="ba-header"><div>OCC HUD v29.2 (Dynamic Schedule Active)</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="ba-header"><div>OCC HUD v29.2 (Radar & Schedule Active)</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
+
+# Render Station Markers
 for mkr in map_markers:
     folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=7, color=mkr['color'], fill=True, popup=folium.Popup(mkr['content'], max_width=650, auto_pan=True, auto_pan_padding=(150, 150)), tooltip=folium.Tooltip(mkr['content'], direction='top', sticky=False)).add_to(m)
+
+# Render Aircraft Markers (If Enabled)
+if show_radar:
+    for p in radar_data:
+        p_color = "#00bfff" if p['type']=="CFE" else "#ff4500"
+        
+        # New Sharp SVG Airplane Vector
+        svg_html = f'''
+        <div style="transform: translate(-50%, -50%) rotate({p["hdg"]}deg); width: 20px; height: 20px;">
+            <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21,16v-2l-8-5V3.5C13,2.67,12.33,2,11.5,2S10,2.67,10,3.5V9l-8,5v2l8-2.5V19l-2,1.5V22l3.5-1l3.5,1v-1.5L13,19v-5.5L21,16z" 
+                      fill="{p_color}" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+        </div>
+        '''
+        folium.Marker(
+            [p['lat'], p['lon']], 
+            icon=folium.DivIcon(html=svg_html, class_name="dummy"),
+            tooltip=f"<div style='font-family:Arial; font-size:13px; color:#002366; padding:5px; text-align:center;'><b>FLT: {p['flt']}</b><hr style='margin:4px 0;'>DEP: {p['dep']} | ARR: {p['arr']}<br>Height: {p['alt']} ft</div>"
+        ).add_to(m)
+
 st_folium(m, width=1200, height=800, key="map_stable_v292")
 
 # 9. ALERTS & STRATEGY
@@ -410,13 +498,11 @@ if st.session_state.investigate_iata != "None":
     cur_xw = calculate_xwind(d.get('w_dir', 0), max(d.get('w_spd', 0), d.get('w_gst', 0)), info['rwy'])
     
     alt_list = []
-    # Note: Alternates are calculated using the full 47 base_airports network, not just the active flights
     for g in [a for a in base_airports.keys() if a not in metar_alerts and a not in taf_alerts]:
         if g != iata and g in base_airports:
             dist = calculate_dist(info['lat'], info['lon'], base_airports[g]['lat'], base_airports[g]['lon'])
-            # We fetch alternate weather separately to ensure we have data even if it was hidden from the map
             alt_xw = 0
-            score = (dist * 0.6) + (alt_xw * 2.5) # simplified fallback for alternatates if dynamically filtered out
+            score = (dist * 0.6) + (alt_xw * 2.5)
             alt_list.append({"iata": g, "dist": dist, "xw": "CHK", "score": score})
     alt_list = sorted(alt_list, key=lambda x: x['score'])[:3]
     rwy_brief = f"RWY {int(info['rwy']/10):02d}/{int(((info['rwy']+180)%360)/10):02d}"
