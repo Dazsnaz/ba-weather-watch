@@ -180,9 +180,15 @@ base_airports = {
     "ALG": {"icao": "DAAG", "lat": 36.691, "lon": 3.215, "rwy": 230, "fleet": "Euroflyer", "spec": False},
 }
 
-if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
+# 5. SESSION STATE MANAGEMENT (Crucial for Map Zoom persistence)
+if 'investigate_iata' not in st.session_state: 
+    st.session_state.investigate_iata = "None"
+if "map_center" not in st.session_state:
+    st.session_state.map_center = [50.0, 10.0]
+if "map_zoom" not in st.session_state:
+    st.session_state.map_zoom = 4
 
-# 5. SIDEBAR WITH CSV UPLOADER & CALENDAR
+# 6. SIDEBAR WITH CSV UPLOADER & CALENDAR
 with st.sidebar:
     st.title("🛠️ COMMAND HUD")
     
@@ -243,7 +249,7 @@ with st.sidebar:
     st.markdown("---")
     map_theme = st.radio("MAP THEME", ["Dark Mode", "Light Mode"])
 
-# 6. DATA FETCH & PROCESSING
+# 7. DATA FETCH & PROCESSING
 @st.cache_data(ttl=1800)
 def get_raw_weather_master(airport_dict):
     raw_res = {}
@@ -333,7 +339,7 @@ if not flight_schedule.empty:
 current_utc_date = datetime.now(timezone.utc).date()
 current_utc_time_str = datetime.now(timezone.utc).strftime('%H:%M')
 
-# 7. MAP MARKER PREPARATION
+# 8. MAP MARKER PREPARATION
 metar_alerts, taf_alerts, green_stations, map_markers = {}, {}, [], []
 for iata, info in display_airports.items():
     data = weather_data.get(iata)
@@ -424,12 +430,18 @@ for iata, info in display_airports.items():
     shared_content = f"""<div style="width:580px; color:black !important; font-family:monospace; font-size:14px; background:white; padding:15px; border-radius:5px;"><b style="color:#002366; font-size:18px;">{iata} STATUS {trend_icon}</b><div style="margin-top:8px; padding:10px; border-left:6px solid {color}; background:#f9f9f9; font-size:16px;"><b style="color:#002366;">{rwy_text} X-Wind:</b> <b>{cur_xw} KT</b><br><b>ACTUAL:</b> {"/".join(m_issues) if m_issues else "STABLE"}<br><b>FORECAST ({time_horizon}):</b> {"+".join(data['f_issues']) if data['f_issues'] else "NIL"}</div><hr style="border:1px solid #ddd;"><div style="display:flex; gap:12px;"><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>METAR</b><br>{m_bold}</div><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>TAF</b><br>{t_bold}</div></div>{inbound_html}</div>"""
     map_markers.append({"lat": info['lat'], "lon": info['lon'], "color": color, "content": shared_content, "iata": iata, "trend": trend_icon})
 
-# 8. LIVE MAP FRAGMENT (Refreshes Radar without Greying Screen)
+# 9. LIVE MAP FRAGMENT (Refreshes Radar without Greying Screen & Keeps Zoom)
 st.markdown(f'<div class="ba-header"><div>OCC HUD v29.2 (Radar & Schedule Active)</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 @st.fragment(run_every=20)
 def live_radar_map(cf_enabled, ef_enabled):
-    m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
+    # Use the session state values to build the map exactly where you left it
+    m = folium.Map(
+        location=st.session_state.map_center, 
+        zoom_start=st.session_state.map_zoom, 
+        tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), 
+        scrollWheelZoom=False
+    )
 
     for mkr in map_markers:
         folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=7, color=mkr['color'], fill=True, popup=folium.Popup(mkr['content'], max_width=650, auto_pan=True, auto_pan_padding=(150, 150)), tooltip=folium.Tooltip(mkr['content'], direction='top', sticky=False)).add_to(m)
@@ -437,7 +449,6 @@ def live_radar_map(cf_enabled, ef_enabled):
     if show_radar:
         raw_radar = fetch_raw_radar()
         for p in raw_radar:
-            # TACTICAL AIRCRAFT FILTERING
             if p['type'] == 'CFE' and not cf_enabled:
                 continue
             if p['type'] == 'EFW' and not ef_enabled:
@@ -466,12 +477,17 @@ def live_radar_map(cf_enabled, ef_enabled):
                 tooltip=f"<div style='font-family:Arial; font-size:13px; color:#002366; padding:5px; text-align:center;'><b>FLT: {flt}</b><hr style='margin:4px 0;'>DEP: {dep} | ARR: {arr}<br>Height: {p['alt']} ft</div>"
             ).add_to(m)
 
-    st_folium(m, width=1200, height=800, key="map_stable_v292")
+    # st_folium automatically returns the map state when a user interacts with it
+    map_data = st_folium(m, width=1200, height=800, key="map_stable_v292", returned_objects=["center", "zoom"])
+    
+    # Save the new coordinates if the user panned or zoomed
+    if map_data and map_data.get("center"):
+        st.session_state.map_center = [map_data["center"]["lat"], map_data["center"]["lng"]]
+        st.session_state.map_zoom = map_data["zoom"]
 
-# Call the fragment with the sidebar variables
 live_radar_map(show_cf, show_ef)
 
-# 9. ALERTS & STRATEGY
+# 10. ALERTS & STRATEGY
 st.markdown('<div class="section-header">🔴 Actual Alerts (METAR)</div>', unsafe_allow_html=True)
 if metar_alerts:
     cols = st.columns(5)
@@ -510,7 +526,7 @@ if st.session_state.investigate_iata != "None":
         st.session_state.investigate_iata = "None"
         st.rerun()
 
-# 10. HANDOVER LOG
+# 11. HANDOVER LOG
 st.markdown('<div class="section-header">📝 Shift Handover Log</div>', unsafe_allow_html=True)
 current_time = datetime.now().strftime('%H:%M')
 h_txt = f"HANDOVER {current_time}Z | SCAN WINDOW: {time_horizon}\n" + "="*50 + "\n"
