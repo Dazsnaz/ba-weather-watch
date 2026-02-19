@@ -5,6 +5,7 @@ from avwx import Metar, Taf
 import math
 import re
 import io
+import os
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 
@@ -74,7 +75,7 @@ def load_schedule_robust(file_bytes):
         df = pd.read_csv(io.StringIO(file_bytes.decode('utf-8')), skiprows=skip_r, on_bad_lines='skip')
         df = df.dropna(subset=['FLT'])
         
-        # FIX 1: Strip invisible spaces from the station codes to guarantee matching
+        # Strip invisible spaces from the station codes to guarantee matching
         if 'DEP' in df.columns: df['DEP'] = df['DEP'].astype(str).str.strip().str.upper()
         if 'ARR' in df.columns: df['ARR'] = df['ARR'].astype(str).str.strip().str.upper()
             
@@ -137,33 +138,45 @@ base_airports = {
 
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 
-# 5. SIDEBAR WITH CSV UPLOADER & CALENDAR
+# Define the Global Save Path for the CSV
+SCHEDULE_FILE = "active_schedule.csv"
+
+# 5. SIDEBAR WITH GLOBAL CSV LOADER
 with st.sidebar:
     st.title("🛠️ COMMAND HUD")
     
     st.markdown("📂 **SCHEDULE INTEGRATION**")
-    uploaded_file = st.file_uploader("Upload Daily Flight Schedule (CSV)", type=["csv"])
+    uploaded_file = st.file_uploader("Upload Daily CSV to Set Global Schedule", type=["csv"])
+    
+    # If a new file is uploaded, overwrite the global server file
+    if uploaded_file is not None:
+        with open(SCHEDULE_FILE, "wb") as f:
+            f.write(uploaded_file.getvalue())
+        st.success("✅ Master Schedule Updated for all users!")
     
     flight_schedule = pd.DataFrame()
     selected_date = st.date_input("📅 Select Operations Date:", value=datetime.now().date())
     active_stations = set()
     
-    if uploaded_file is not None:
-        flight_schedule = load_schedule_robust(uploaded_file.getvalue())
+    # Always attempt to load the global server file
+    if os.path.exists(SCHEDULE_FILE):
+        with open(SCHEDULE_FILE, "rb") as f:
+            saved_bytes = f.read()
+        
+        flight_schedule = load_schedule_robust(saved_bytes)
+        
         if not flight_schedule.empty and 'DATE_OBJ' in flight_schedule.columns:
             flight_schedule = flight_schedule[flight_schedule['DATE_OBJ'] == selected_date]
             if not flight_schedule.empty:
-                st.success(f"Loaded {len(flight_schedule)} flights for {selected_date.strftime('%d %b %Y')}")
+                st.info(f"Using Global Schedule: {len(flight_schedule)} flights active for {selected_date.strftime('%d %b %Y')}")
                 active_stations = set(flight_schedule['DEP'].dropna()) | set(flight_schedule['ARR'].dropna())
             else:
                 st.warning(f"No flights found for {selected_date.strftime('%d %b %Y')}. Displaying full network.")
-        else:
-            st.error("Error reading file. Ensure it's the correct BA CSV export.")
     else:
-        st.info("Upload your shift's CSV to dynamically filter active stations & view flight impacts.")
-    
+        st.warning("No global schedule found. Upload a CSV above to map active stations.")
+
     # DYNAMIC STATION FILTERING
-    if uploaded_file is not None and active_stations:
+    if not flight_schedule.empty and active_stations:
         display_airports = {k: v for k, v in base_airports.items() if k in active_stations}
     else:
         display_airports = base_airports
@@ -263,8 +276,6 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
 weather_data = process_weather_for_horizon(raw_weather_bundle, display_airports, horizon_hours, xw_limit)
 
 current_utc_date = datetime.now(timezone.utc).date()
-
-# FIX 2: Safely format current time as HHMM without a colon to match CSV formats
 current_utc_time_str = datetime.now(timezone.utc).strftime('%H%M')
 
 # 7. MAP MARKERS & SCHEDULE INJECTION
@@ -313,7 +324,6 @@ for iata, info in display_airports.items():
             rows = ""
             for _, row in arr_flights.iterrows():
                 sta_raw = str(row['STA']).strip()
-                # Remove colons from STA (e.g. '14:30' becomes '1430') for safe math comparison
                 sta_clean = sta_raw.replace(':', '') 
                 flight_date = row['DATE_OBJ']
                 
@@ -347,7 +357,7 @@ for iata, info in display_airports.items():
     map_markers.append({"lat": info['lat'], "lon": info['lon'], "color": color, "content": shared_content, "iata": iata, "trend": trend_icon})
 
 # 8. UI RENDER
-st.markdown(f'<div class="ba-header"><div>OCC HUD v29.2 (Strategic Build)</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="ba-header"><div>OCC HUD v29.3 (Global Roster Active)</div><div>{datetime.now().strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
 
 m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
 for mkr in map_markers:
