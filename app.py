@@ -73,6 +73,11 @@ def load_schedule_robust(file_bytes):
                 break
         df = pd.read_csv(io.StringIO(file_bytes.decode('utf-8')), skiprows=skip_r, on_bad_lines='skip')
         df = df.dropna(subset=['FLT'])
+        
+        # FIX 1: Strip invisible spaces from the station codes to guarantee matching
+        if 'DEP' in df.columns: df['DEP'] = df['DEP'].astype(str).str.strip().str.upper()
+        if 'ARR' in df.columns: df['ARR'] = df['ARR'].astype(str).str.strip().str.upper()
+            
         df['DATE_OBJ'] = pd.to_datetime(df['DATE'], format='%d/%m/%y', errors='coerce').dt.date
         df['DATE_OBJ'] = df['DATE_OBJ'].fillna(pd.to_datetime(df['DATE'], dayfirst=True, errors='coerce').dt.date)
         return df
@@ -219,7 +224,6 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
             for lyr in m.data.clouds:
                 if lyr.type in ['BKN', 'OVC'] and lyr.base: m_cig = min(m_cig, lyr.base * 100)
         
-        # PRE-INITIALIZE VARIABLES TO PREVENT UNBOUND LOCAL ERROR
         w_issues = []
         f_time = ""
         
@@ -259,7 +263,9 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
 weather_data = process_weather_for_horizon(raw_weather_bundle, display_airports, horizon_hours, xw_limit)
 
 current_utc_date = datetime.now(timezone.utc).date()
-current_utc_time_str = datetime.now(timezone.utc).strftime('%H:%M')
+
+# FIX 2: Safely format current time as HHMM without a colon to match CSV formats
+current_utc_time_str = datetime.now(timezone.utc).strftime('%H%M')
 
 # 7. MAP MARKERS & SCHEDULE INJECTION
 metar_alerts, taf_alerts, green_stations, map_markers = {}, {}, [], []
@@ -302,15 +308,18 @@ for iata, info in display_airports.items():
     
     inbound_html = ""
     if not flight_schedule.empty:
-        arr_flights = flight_schedule[flight_schedule['ARR'] == iata].sort_values(by='STA')
+        arr_flights = flight_schedule[flight_schedule['ARR'] == iata]
         if not arr_flights.empty:
             rows = ""
             for _, row in arr_flights.iterrows():
-                sta = str(row['STA']).strip()
+                sta_raw = str(row['STA']).strip()
+                # Remove colons from STA (e.g. '14:30' becomes '1430') for safe math comparison
+                sta_clean = sta_raw.replace(':', '') 
                 flight_date = row['DATE_OBJ']
                 
+                # Check if flight has already arrived
                 if flight_date < current_utc_date: continue
-                if flight_date == current_utc_date and sta < current_utc_time_str: continue
+                if flight_date == current_utc_date and sta_clean < current_utc_time_str: continue
                 
                 flt = str(row['FLT']).strip()
                 dep = str(row['DEP']).strip()
@@ -322,7 +331,7 @@ for iata, info in display_airports.items():
                 elif color == "#d6001a": f_status, f_color = "AT RISK", "#d6001a"
                 elif color == "#eb8f34": f_status, f_color = "CAUTION", "#eb8f34"
                     
-                rows += f"<tr style='border-bottom: 1px solid #ddd;'><td style='color:{f_color}; font-weight:bold; padding:4px;'>{f_status}</td><td style='padding:4px;'>{flt}</td><td style='padding:4px;'>{dep}</td><td style='padding:4px;'>{arr}</td><td style='padding:4px;'>{sta}</td></tr>"
+                rows += f"<tr style='border-bottom: 1px solid #ddd;'><td style='color:{f_color}; font-weight:bold; padding:4px;'>{f_status}</td><td style='padding:4px;'>{flt}</td><td style='padding:4px;'>{dep}</td><td style='padding:4px;'>{arr}</td><td style='padding:4px;'>{sta_raw}</td></tr>"
                 
             if rows:
                 inbound_html = f"""
