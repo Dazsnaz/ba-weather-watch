@@ -12,46 +12,53 @@ from datetime import datetime, timedelta, timezone
 # 1. PAGE CONFIG
 st.set_page_config(layout="wide", page_title="BA OCC HUD", page_icon="✈️", initial_sidebar_state="expanded")
 
-# 2. V30.7 "PLAY NICE" CSS + COLOR & DROPDOWN FIXES
+# 2. IRONCLAD FULL-SCREEN CSS
 st.markdown('<meta http-equiv="refresh" content="900">', unsafe_allow_html=True)
 
 st.markdown("""
     <style>
-    /* 1. REMOVE ALL PADDING SO MAP TOUCHES THE EDGES */
+    /* 1. HIDE ALL STREAMLIT MARGINS */
     .block-container, [data-testid="stMainBlockContainer"] {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
+        padding: 0 !important;
+        margin: 0 !important;
         max-width: 100% !important;
     }
     
-    /* 2. HEADER RESTORED: Matches dark background so Arrow stays visible */
-    header[data-testid="stHeader"] {
-        background-color: #001a33 !important;
+    /* 2. GHOST HEADER: Let's you click the Map Zoom buttons underneath! */
+    header[data-testid="stHeader"] { 
+        background: transparent !important; 
+        pointer-events: none !important; 
     }
     .stAppToolbar { display: none !important; }
     
-    /* 3. BA RED SIDEBAR ARROW (Highly visible in top left) */
-    [data-testid="collapsedControl"], button[kind="header"] {
-        background-color: #d6001a !important;
+    /* 3. BRIGHT RED SIDEBAR ARROW (Moved down to clear Zoom Buttons) */
+    [data-testid="collapsedControl"] {
+        background-color: #d6001a !important; /* BA RED */
+        pointer-events: auto !important; /* Makes it clickable */
+        border: 2px solid white !important;
         border-radius: 5px !important;
-        margin-top: 10px !important;
-        margin-left: 10px !important;
+        position: fixed !important;
+        top: 90px !important; 
+        left: 15px !important;
+        z-index: 999999 !important;
         padding: 5px !important;
+        transform: none !important;
     }
-    [data-testid="collapsedControl"] svg, button[kind="header"] svg {
-        fill: white !important;
-        color: white !important;
-    }
+    [data-testid="collapsedControl"] svg { fill: white !important; color: white !important; }
     
-    /* 4. FORCE MAP TO FILL EXACT VIEWPORT HEIGHT */
+    /* 4. ABSOLUTE FULL SCREEN MAP (Forces 100% of Monitor) */
     iframe[title="streamlit_folium.st_folium"] {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
         height: 100vh !important;
+        z-index: 0 !important;
+        border: none !important;
     }
     
     /* 5. FORCE SIDEBAR BACKGROUND TO DARK BLUE */
-    section[data-testid="stSidebar"] { background-color: #002366 !important; border-right: 3px solid #d6001a !important; }
+    section[data-testid="stSidebar"] { background-color: #002366 !important; border-right: 3px solid #d6001a; z-index: 999999 !important; }
     section[data-testid="stSidebar"] > div { background-color: #002366 !important; }
     
     /* 6. SIDEBAR TEXT CONTRAST (White text on Blue) */
@@ -65,7 +72,7 @@ st.markdown("""
     }
     
     /* 7. DROPDOWN MENU FIX (Dark text on White background) */
-    div[data-baseweb="select"] > div { background-color: white !important; border: 2px solid #d6001a !important; }
+    div[data-baseweb="select"] > div { background-color: white !important; }
     div[data-baseweb="select"] * { color: #002366 !important; font-weight: bold !important; }
     ul[role="listbox"] { background-color: white !important; }
     ul[role="listbox"] li { color: #002366 !important; font-weight: bold !important; }
@@ -77,12 +84,13 @@ st.markdown("""
     .stButton button[kind="primary"] { background-color: #d6001a !important; color: white !important; }
     
     /* 9. EXPANDERS */
-    div[data-testid="stExpander"] { background-color: #001a33 !important; border: 1px solid #005a9c !important; border-radius: 8px !important; margin-bottom: 10px !important;}
-    div[data-testid="stExpander"] summary p { font-size: 1.1rem !important; color: white !important; }
+    div[data-testid="stExpander"] { background-color: #001a33 !important; border: 1px solid #005a9c !important; border-radius: 8px !important; margin-bottom: 10px !important; }
+    div[data-testid="stExpander"] summary p { font-size: 1.1rem !important; }
     
-    /* 10. OVERLAYS */
-    .floating-hud { position: absolute; top: 65px; right: 20px; background-color: rgba(0, 35, 102, 0.85); border: 2px solid #d6001a; padding: 10px 25px; border-radius: 8px; color: white; font-weight: bold; z-index: 9999; backdrop-filter: blur(5px); box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; gap: 20px; font-size: 1.1rem; pointer-events: none; }
+    /* 10. FLOATING HUD CLOCK (Top Right) */
+    .floating-hud { position: fixed; top: 15px; right: 20px; background-color: rgba(0, 35, 102, 0.85); border: 2px solid #d6001a; padding: 10px 25px; border-radius: 8px; color: white; font-weight: bold; z-index: 999998; backdrop-filter: blur(5px); box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; gap: 20px; font-size: 1.1rem; pointer-events: none; }
     
+    /* 11. MAP POPUPS */
     .leaflet-tooltip, .leaflet-popup-content-wrapper { background: white !important; border: 2px solid #002366 !important; padding: 0 !important; opacity: 1 !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -191,13 +199,12 @@ base_airports = {
     "MUC": {"icao": "EDDM", "lat": 48.353, "lon": 11.786, "rwy": 80, "fleet": "Both", "spec": False},
 }
 
-# STARTUP MEMORY (This fixes the AttributeError crash!)
 if 'investigate_iata' not in st.session_state: st.session_state.investigate_iata = "None"
 if "map_center" not in st.session_state: st.session_state.map_center = [50.0, 10.0]
 if "map_zoom" not in st.session_state: st.session_state.map_zoom = 5
 SCHEDULE_FILE = "active_schedule.csv"
 
-# 5. WEATHER ENGINE (Runs first so Sidebar can use the data)
+# 5. WEATHER ENGINE 
 @st.cache_data(ttl=900)
 def get_raw_weather_master(airport_dict):
     raw_res = {}
@@ -253,74 +260,17 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
         processed[iata] = {"vis": m_vis, "cig": m_cig, "status": "online", "w_dir": w_dir, "w_spd": w_spd, "w_gst": w_gst, "raw_m": m.raw or "N/A", "raw_t": t.raw if t else "N/A", "f_issues": list(set(w_issues)), "f_time": f_time}
     return processed
 
-# Placeholder to store user settings before scanning weather
-temp_horizon_hours = 6
-temp_xw_limit = 25
 
-# 6. SIDEBAR MASTER PANEL (Strategy Brief & Menus inside!)
+# 6. SIDEBAR MASTER PANEL (Using Placeholders for Perfect Data Sync)
 with st.sidebar:
     st.markdown("<h2 style='text-align: center; color: white; margin-bottom: 0px;'>✈️ COMMAND HUD</h2>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:10px 0; border: 1px solid #d6001a;'>", unsafe_allow_html=True)
     
-    # ---- DYNAMIC STRATEGY BRIEF RENDERED INSIDE THE SIDEBAR ----
-    if st.session_state.investigate_iata != "None":
-        iata = st.session_state.investigate_iata
-        st.markdown("<hr style='margin:10px 0; border: 1px solid #d6001a;'>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='color: #eb8f34; text-align: center; margin-top: 0px;'>📋 {iata} STRATEGY BRIEF</h3>", unsafe_allow_html=True)
-        
-        # Pull data just for this station
-        d = process_weather_for_horizon(raw_weather_bundle, base_airports, 24, 25).get(iata, {})
-        info = base_airports.get(iata, {"rwy": 0, "lat": 0, "lon": 0})
-        cur_w_dir = get_safe_num(d.get('w_dir', 0))
-        cur_w_spd = get_safe_num(d.get('w_spd', 0))
-        cur_w_gst = get_safe_num(d.get('w_gst', 0))
-        cur_xw = calculate_xwind(cur_w_dir, max(cur_w_spd, cur_w_gst), info['rwy'])
-        
-        # Calculate Alternates
-        preferred_alts = []
-        if iata == "FLR": preferred_alts = ["PSA", "BLQ"]
-        elif iata == "FNC": preferred_alts = ["PXO"]
-        elif iata == "INN": preferred_alts = ["MUC"]
-        
-        alt_list = []
-        for g in base_airports.keys():
-            if g != iata:
-                dist = calculate_dist(info['lat'], info['lon'], base_airports[g]['lat'], base_airports[g]['lon'])
-                alt_wx = process_weather_for_horizon(raw_weather_bundle, base_airports, 24, 25).get(g, {})
-                alt_w_dir = get_safe_num(alt_wx.get('w_dir', 0))
-                alt_w_spd = get_safe_num(alt_wx.get('w_spd', 0))
-                alt_w_gst = get_safe_num(alt_wx.get('w_gst', 0))
-                alt_xw = calculate_xwind(alt_w_dir, max(alt_w_spd, alt_w_gst), base_airports[g]['rwy'])
-                score = dist
-                if g in preferred_alts: score -= 1000 
-                alt_list.append({"iata": g, "dist": dist, "xw": alt_xw, "score": score})
-        
-        alt_list = sorted(alt_list, key=lambda x: x['score'])[:3]
-        alt_rows = "".join([f"<tr style='border-bottom: 1px solid #aaa;'><td><b>{a['iata']}</b></td><td>{a['dist']}</td><td>{a['xw']}kt</td></tr>" for a in alt_list])
-        
-        st.markdown(f"""
-        <div style="background-color: white; padding: 15px; border-radius: 8px; color: #002366; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            <b style="font-size: 15px;">Live {int(info['rwy']/10):02d}/{int(((info['rwy']+180)%360)/10):02d} X-Wind:</b> <b style="color:#d6001a;">{cur_xw} kt</b><br>
-            <hr style="margin: 10px 0; border: 1px solid #ccc;">
-            <b style="color:#d6001a;">Tactical Alternates:</b>
-            <table style="width:100%; text-align: left; font-size: 13px; margin-top: 5px;">
-                <tr style="background-color: #002366; color: white;"><th>Alt</th><th>Dist</th><th>X-Wind</th></tr>
-                {alt_rows}
-            </table>
-            <hr style="margin: 10px 0; border: 1px solid #ccc;">
-            <b style="color:#002366;">METAR:</b><br><span style="font-family: monospace; font-size: 12px;">{bold_hazard(d.get('raw_m'))}</span><br><br>
-            <b style="color:#002366;">TAF:</b><br><span style="font-family: monospace; font-size: 12px;">{bold_hazard(d.get('raw_t'))}</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("❌ CLOSE STRATEGY BRIEF", type="primary", use_container_width=True):
-            st.session_state.investigate_iata = "None"
-            st.rerun()
-            
-    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-    alerts_container = st.container() # For red/amber buttons
-    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+    # Placeholders map out the top of the sidebar so we can inject the strategy brief & alerts LATER
+    brief_placeholder = st.empty()
+    alerts_placeholder = st.empty()
     
-    # TUCKED AWAY SETTINGS & SCHEDULE
+    # TUCKED AWAY SETTINGS & SCHEDULE (We get inputs here first!)
     with st.expander("⚙️ SCHEDULE & SETTINGS", expanded=False):
         uploaded_file = st.file_uploader("Upload CSV Schedule", type=["csv"])
         if uploaded_file is not None:
@@ -342,9 +292,10 @@ with st.sidebar:
         show_ef = st.checkbox("Euroflyer (EFW)", value=True)
         map_theme = st.radio("MAP THEME", ["Dark Mode", "Light Mode"])
 
-    log_container = st.container()
+    log_placeholder = st.empty()
 
-# 7. PARSE SCHEDULE & PROCESS WEATHER
+
+# 7. PARSE SCHEDULE & PROCESS WEATHER WITH NEW VARIABLES
 flight_schedule = pd.DataFrame()
 active_stations = set()
 if os.path.exists(SCHEDULE_FILE):
@@ -362,16 +313,13 @@ current_utc_date = datetime.now(timezone.utc).date()
 current_utc_time_str = datetime.now(timezone.utc).strftime('%H%M')
 display_time = datetime.now(timezone.utc).strftime("%H:%M")
 
+
 # 8. MAP MARKERS & ALERTS (WITH AIRCRAFT/FLEET AWARENESS)
 metar_alerts, taf_alerts, map_markers = {}, {}, []
 for iata, info in display_airports.items():
     data = weather_data.get(iata)
     if not data: continue
     
-    # -------------------------------------------------------------
-    # DYNAMIC FLEET AWARENESS CHECK
-    # Scans the actual CSV to see if E90 (CF) or 32E/31E (EF) are flying today
-    # -------------------------------------------------------------
     is_cf_station, is_ef_station = False, False
     if not flight_schedule.empty:
         sf = flight_schedule[(flight_schedule['DEP'] == iata) | (flight_schedule['ARR'] == iata)]
@@ -379,7 +327,7 @@ for iata, info in display_airports.items():
             ac_types = sf['AC'].dropna().astype(str).str.upper().unique()
             if any('E90' in ac for ac in ac_types): is_cf_station = True
             if any(ac in ['31E', '32E', '320', '319'] for ac in ac_types): is_ef_station = True
-            if not is_cf_station and not is_ef_station: # Catchall
+            if not is_cf_station and not is_ef_station: 
                 is_cf_station = (info.get('fleet') in ['Cityflyer', 'Both'])
                 is_ef_station = (info.get('fleet') in ['Euroflyer', 'Both'])
         else:
@@ -389,7 +337,6 @@ for iata, info in display_airports.items():
         is_cf_station = (info.get('fleet') in ['Cityflyer', 'Both'])
         is_ef_station = (info.get('fleet') in ['Euroflyer', 'Both'])
         
-    # If user unchecked CF, and it's ONLY a CF station, skip it.
     if not ((is_cf_station and show_cf) or (is_ef_station and show_ef)): continue
 
     v_lim, c_lim = (1500, 500) if info['spec'] else (800, 200)
@@ -454,8 +401,64 @@ for iata, info in display_airports.items():
     shared_content = f"""<div style="width:580px; color:black !important; font-family:monospace; font-size:14px; background:white; padding:15px; border-radius:5px;"><b style="color:#002366; font-size:18px;">{iata} STATUS {trend_icon}</b><div style="margin-top:8px; padding:10px; border-left:6px solid {color}; background:#f9f9f9; font-size:16px;"><b style="color:#002366;">{rwy_text} X-Wind:</b> <b>{cur_xw} KT</b><br><b>ACTUAL:</b> {"/".join(m_issues) if m_issues else "STABLE"}<br><b>FORECAST ({temp_horizon_hours}H):</b> {"+".join(data['f_issues']) if data['f_issues'] else "NIL"}</div><hr style="border:1px solid #ddd;"><div style="display:flex; gap:12px;"><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>METAR</b><br>{m_bold}</div><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>TAF</b><br>{t_bold}</div></div>{inbound_html}</div>"""
     map_markers.append({"lat": info['lat'], "lon": info['lon'], "color": color, "content": shared_content, "iata": iata, "trend": trend_icon})
 
-# 9. INJECT BUTTONS INTO THE SIDEBAR
-with alerts_container:
+
+# 9. INJECT DYNAMIC STRATEGY BRIEF INTO SIDEBAR PLACEHOLDER (With fixed text colors!)
+with brief_placeholder.container():
+    if st.session_state.investigate_iata != "None":
+        iata = st.session_state.investigate_iata
+        st.markdown(f"<h3 style='color: #eb8f34; text-align: center; margin-top: 0px;'>📋 {iata} STRATEGY BRIEF</h3>", unsafe_allow_html=True)
+        
+        d = weather_data.get(iata, {})
+        info = base_airports.get(iata, {"rwy": 0, "lat": 0, "lon": 0})
+        cur_w_dir = get_safe_num(d.get('w_dir', 0))
+        cur_w_spd = get_safe_num(d.get('w_spd', 0))
+        cur_w_gst = get_safe_num(d.get('w_gst', 0))
+        cur_xw = calculate_xwind(cur_w_dir, max(cur_w_spd, cur_w_gst), info['rwy'])
+        
+        preferred_alts = []
+        if iata == "FLR": preferred_alts = ["PSA", "BLQ"]
+        elif iata == "FNC": preferred_alts = ["PXO"]
+        elif iata == "INN": preferred_alts = ["MUC"]
+        
+        alt_list = []
+        for g in base_airports.keys():
+            if g != iata:
+                dist = calculate_dist(info['lat'], info['lon'], base_airports[g]['lat'], base_airports[g]['lon'])
+                alt_wx = weather_data.get(g, {})
+                alt_w_dir = get_safe_num(alt_wx.get('w_dir', 0))
+                alt_w_spd = get_safe_num(alt_wx.get('w_spd', 0))
+                alt_w_gst = get_safe_num(alt_wx.get('w_gst', 0))
+                alt_xw = calculate_xwind(alt_w_dir, max(alt_w_spd, alt_w_gst), base_airports[g]['rwy'])
+                score = dist
+                if g in preferred_alts: score -= 1000 
+                alt_list.append({"iata": g, "dist": dist, "xw": alt_xw, "score": score})
+        
+        alt_list = sorted(alt_list, key=lambda x: x['score'])[:3]
+        alt_rows = "".join([f"<tr style='border-bottom: 1px solid #aaa;'><td style='color:#002366 !important;'><b>{a['iata']}</b></td><td style='color:#002366 !important;'>{a['dist']} NM</td><td style='color:#002366 !important;'>{a['xw']} kt</td></tr>" for a in alt_list])
+        
+        st.markdown(f"""
+        <div style="background-color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <b style="font-size: 15px; color:#002366 !important;">Live {int(info['rwy']/10):02d}/{int(((info['rwy']+180)%360)/10):02d} X-Wind:</b> <b style="color:#d6001a !important;">{cur_xw} kt</b><br>
+            <hr style="margin: 10px 0; border: 1px solid #ccc;">
+            <b style="color:#d6001a !important;">Tactical Alternates:</b>
+            <table style="width:100%; text-align: left; font-size: 13px; margin-top: 5px; border-collapse: collapse;">
+                <tr style="background-color: #002366; color: white;"><th>Alt</th><th>Dist</th><th>X-Wind</th></tr>
+                {alt_rows}
+            </table>
+            <hr style="margin: 10px 0; border: 1px solid #ccc;">
+            <b style="color:#002366 !important;">LIVE METAR:</b><br><div style="font-family: monospace; font-size: 12px; color:#002366 !important; white-space: pre-wrap; word-wrap: break-word;">{bold_hazard(d.get('raw_m', 'N/A'))}</div><br>
+            <b style="color:#002366 !important;">LIVE TAF:</b><br><div style="font-family: monospace; font-size: 12px; color:#002366 !important; white-space: pre-wrap; word-wrap: break-word;">{bold_hazard(d.get('raw_t', 'N/A'))}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("❌ CLOSE STRATEGY BRIEF", type="primary", use_container_width=True):
+            st.session_state.investigate_iata = "None"
+            st.rerun()
+        st.markdown("<hr style='margin:10px 0; border: 1px solid #d6001a;'>", unsafe_allow_html=True)
+
+
+# 10. INJECT ALERTS INTO SIDEBAR PLACEHOLDER
+with alerts_placeholder.container():
     if not metar_alerts and not taf_alerts: st.success("✅ Network Stable - No Active Hazards")
     if metar_alerts:
         st.markdown("<p style='color:white; margin-bottom: 5px;'>🔴 <b>ACTUAL HAZARDS (NOW)</b></p>", unsafe_allow_html=True)
@@ -466,18 +469,20 @@ with alerts_container:
         for iata, d in taf_alerts.items():
             if st.button(f"{iata} | {d['time']} {d['type']}", key=f"f_{iata}", type="secondary"): st.session_state.investigate_iata = iata
 
-with log_container:
+
+# 11. INJECT HANDOVER LOG INTO BOTTOM EXPANDER
+with log_placeholder.container():
     h_txt = f"HANDOVER {display_time}Z | SCAN WINDOW: {temp_horizon_hours}H\n" + "="*50 + "\n"
     for i_ata, d_taf in taf_alerts.items(): h_txt += f"{i_ata}: {d_taf['type']} ({d_taf['time']})\n"
     with st.expander("📝 SHIFT HANDOVER LOG", expanded=False):
         st.text_area("Handover Report:", value=h_txt, height=200, label_visibility="collapsed")
 
-# 10. RENDER FULL SCREEN MAP
+
+# 12. RENDER FULL SCREEN MAP
 st.markdown(f'<div class="floating-hud"><div>📡 Command Edition</div><div>|</div><div style="color: #eb8f34;">{display_time} Z</div></div>', unsafe_allow_html=True)
 
 m = folium.Map(location=st.session_state.map_center, zoom_start=st.session_state.map_zoom, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
 for mkr in map_markers:
     folium.CircleMarker(location=[mkr['lat'], mkr['lon']], radius=7, color=mkr['color'], fill=True, popup=folium.Popup(mkr['content'], max_width=650, auto_pan=True, auto_pan_padding=(150, 150)), tooltip=folium.Tooltip(mkr['content'], direction='top', sticky=False)).add_to(m)
 
-# 1200 height pushes it out so it fills modern screens cleanly without absolute vh hacks
 st_folium(m, width=None, height=1200, use_container_width=True, key="map_stable_v30")
