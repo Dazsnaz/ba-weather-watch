@@ -40,6 +40,12 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 3. UTILITIES & ROBUST CSV LOADER
+def get_safe_num(val, default=0):
+    """Safely converts VRB or None values into a usable number for math formulas."""
+    if val is None: return default
+    try: return float(val)
+    except (ValueError, TypeError): return default
+
 def calculate_dist(lat1, lon1, lat2, lon2):
     R = 3440.065 
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -132,7 +138,6 @@ base_airports = {
     "IVL": {"icao": "EFIV", "lat": 68.607, "lon": 27.405, "rwy": 40, "fleet": "Euroflyer", "spec": False},
     "MLA": {"icao": "LMML", "lat": 35.857, "lon": 14.477, "rwy": 310, "fleet": "Euroflyer", "spec": False},
     "ALG": {"icao": "DAAG", "lat": 36.691, "lon": 3.215, "rwy": 230, "fleet": "Euroflyer", "spec": False},
-    # TACTICAL OFFLINE ALTERNATES (Fetched for Weather, but hidden from schedule map)
     "PSA": {"icao": "LIRP", "lat": 43.683, "lon": 10.392, "rwy": 40, "fleet": "Cityflyer", "spec": False},
     "BLQ": {"icao": "LIPE", "lat": 44.535, "lon": 11.288, "rwy": 120, "fleet": "Cityflyer", "spec": False},
     "PXO": {"icao": "LPPS", "lat": 33.073, "lon": -16.349, "rwy": 180, "fleet": "Euroflyer", "spec": False},
@@ -204,7 +209,7 @@ with st.sidebar:
     st.markdown("---")
     map_theme = st.radio("MAP THEME", ["Dark Mode", "Light Mode"])
 
-# 6. DATA FETCH & PROCESSING (30-Min TTL)
+# 6. DATA FETCH & PROCESSING (Using safe math conversions)
 @st.cache_data(ttl=900)
 def get_raw_weather_master(airport_dict):
     raw_res = {}
@@ -246,9 +251,10 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
                 l_v = line.visibility.value if (hasattr(line, 'visibility') and line.visibility and line.visibility.value is not None) else 9999
                 if l_v < v_lim: w_issues.append("VIS")
                 
-                l_dir = line.wind_direction.value if (hasattr(line, 'wind_direction') and line.wind_direction and line.wind_direction.value is not None) else info['rwy']
-                l_spd_val = line.wind_speed.value if (hasattr(line, 'wind_speed') and line.wind_speed and line.wind_speed.value is not None) else 0
-                l_gst_val = line.wind_gust.value if (hasattr(line, 'wind_gust') and line.wind_gust and line.wind_gust.value is not None) else 0
+                # Use get_safe_num to catch any Variable/None forecast winds
+                l_dir = get_safe_num(line.wind_direction.value, info['rwy']) if (hasattr(line, 'wind_direction') and line.wind_direction) else info['rwy']
+                l_spd_val = get_safe_num(line.wind_speed.value) if (hasattr(line, 'wind_speed') and line.wind_speed) else 0
+                l_gst_val = get_safe_num(line.wind_gust.value) if (hasattr(line, 'wind_gust') and line.wind_gust) else 0
                 l_spd = max(l_spd_val, l_gst_val)
                 
                 if calculate_xwind(l_dir, l_spd, info['rwy']) >= xw_threshold: w_issues.append("XWIND")
@@ -262,9 +268,10 @@ def process_weather_for_horizon(bundle, airport_dict, horizon_limit, xw_threshol
                     f_time = f"{line.start_time.dt.strftime('%H')}Z"
                     break
         
-        w_dir = m.data.wind_direction.value if (m.data and hasattr(m.data, 'wind_direction') and m.data.wind_direction) else 0
-        w_spd = m.data.wind_speed.value if (m.data and hasattr(m.data, 'wind_speed') and m.data.wind_speed) else 0
-        w_gst = m.data.wind_gust.value if (m.data and hasattr(m.data, 'wind_gust') and m.data.wind_gust) else 0
+        # Use get_safe_num to catch any Variable/None live METAR winds
+        w_dir = get_safe_num(m.data.wind_direction.value) if (m.data and hasattr(m.data, 'wind_direction') and m.data.wind_direction) else 0
+        w_spd = get_safe_num(m.data.wind_speed.value) if (m.data and hasattr(m.data, 'wind_speed') and m.data.wind_speed) else 0
+        w_gst = get_safe_num(m.data.wind_gust.value) if (m.data and hasattr(m.data, 'wind_gust') and m.data.wind_gust) else 0
         
         processed[iata] = {
             "vis": m_vis, "cig": m_cig, "status": "online", 
@@ -278,6 +285,7 @@ weather_data = process_weather_for_horizon(raw_weather_bundle, base_airports, ho
 
 current_utc_date = datetime.now(timezone.utc).date()
 current_utc_time_str = datetime.now(timezone.utc).strftime('%H%M')
+display_time = datetime.now(timezone.utc).strftime("%H:%M")
 
 # 7. MAP MARKERS & SCHEDULE INJECTION
 metar_alerts, taf_alerts, green_stations, map_markers = {}, {}, [], []
@@ -287,7 +295,12 @@ for iata, info in display_airports.items():
     v_lim, c_lim = (1500, 500) if info['spec'] else (800, 200)
     m_issues = []
     
-    cur_xw = calculate_xwind(data.get('w_dir', 0), max(data.get('w_spd', 0), data.get('w_gst', 0)), info['rwy'])
+    # Safely pull exact numbers
+    cur_w_dir = get_safe_num(data.get('w_dir', 0))
+    cur_w_spd = get_safe_num(data.get('w_spd', 0))
+    cur_w_gst = get_safe_num(data.get('w_gst', 0))
+    
+    cur_xw = calculate_xwind(cur_w_dir, max(cur_w_spd, cur_w_gst), info['rwy'])
     raw_m = data['raw_m'].upper()
     
     if re.search(r'\bFG\b', raw_m): m_issues.append("FOG")
@@ -296,10 +309,10 @@ for iata, info in display_airports.items():
     if data.get("cig", 9999) < c_lim: m_issues.append("CLOUD")
     if re.search(r'\bTS|VCTS', raw_m): m_issues.append("TSRA")
     if cur_xw >= xw_limit: m_issues.append("XWIND")
-    if data.get('w_gst', 0) > 25 and "XWIND" not in m_issues: m_issues.append("WINDY")
+    if cur_w_gst > 25 and "XWIND" not in m_issues: m_issues.append("WINDY")
     
     if iata == "FLR":
-        tw_comp = abs(max(data.get('w_spd', 0), data.get('w_gst', 0)) * math.cos(math.radians(data.get('w_dir', 0) - 50)))
+        tw_comp = abs(max(cur_w_spd, cur_w_gst) * math.cos(math.radians(cur_w_dir - 50)))
         if tw_comp >= 10: m_issues.append("TAILWIND(>10kt)")
     
     trend_icon = "➡️"
@@ -348,20 +361,13 @@ for iata, info in display_airports.items():
                 rows += f"<tr style='border-bottom: 1px solid #ddd;'><td style='color:{f_color}; font-weight:bold; padding:4px;'>{f_status}</td><td style='padding:4px;'>{flt}</td><td style='padding:4px;'>{dep}</td><td style='padding:4px;'>{arr}</td><td style='padding:4px;'>{sta_raw}</td></tr>"
                 
             if rows:
-                inbound_html = f"""
-                <div style='margin-top:15px; border-top: 2px solid #002366; padding-top:10px;'>
-                    <b style='color:#002366; font-size:14px;'>🛬 YET TO ARRIVE ({selected_date.strftime('%d/%m/%Y')})</b>
-                    <div style='max-height: 200px; overflow-y: auto; margin-top:5px; border: 1px solid #ccc; background: #fff;'>
-                        <table style='width:100%; text-align:left; font-size:12px; border-collapse: collapse; color: #000;'>
-                            <tr style='background:#002366; color:#fff;'><th style='padding:5px;'>Status</th><th style='padding:5px;'>FLT</th><th style='padding:5px;'>DEP</th><th style='padding:5px;'>ARR</th><th style='padding:5px;'>STA</th></tr>
-                            {rows}
-                        </table></div></div>"""
+                inbound_html = f"""<div style='margin-top:15px; border-top: 2px solid #002366; padding-top:10px;'><b style='color:#002366; font-size:14px;'>🛬 YET TO ARRIVE ({selected_date.strftime('%d/%m/%Y')})</b><div style='max-height: 200px; overflow-y: auto; margin-top:5px; border: 1px solid #ccc; background: #fff;'><table style='width:100%; text-align:left; font-size:12px; border-collapse: collapse; color: #000;'><tr style='background:#002366; color:#fff;'><th style='padding:5px;'>Status</th><th style='padding:5px;'>FLT</th><th style='padding:5px;'>DEP</th><th style='padding:5px;'>ARR</th><th style='padding:5px;'>STA</th></tr>{rows}</table></div></div>"""
     
     shared_content = f"""<div style="width:580px; color:black !important; font-family:monospace; font-size:14px; background:white; padding:15px; border-radius:5px;"><b style="color:#002366; font-size:18px;">{iata} STATUS {trend_icon}</b><div style="margin-top:8px; padding:10px; border-left:6px solid {color}; background:#f9f9f9; font-size:16px;"><b style="color:#002366;">{rwy_text} X-Wind:</b> <b>{cur_xw} KT</b><br><b>ACTUAL:</b> {"/".join(m_issues) if m_issues else "STABLE"}<br><b>FORECAST ({time_horizon}):</b> {"+".join(data['f_issues']) if data['f_issues'] else "NIL"}</div><hr style="border:1px solid #ddd;"><div style="display:flex; gap:12px;"><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>METAR</b><br>{m_bold}</div><div style="flex:1; background:#f0f0f0; padding:10px; border-radius:4px; white-space: pre-wrap; word-wrap: break-word;"><b>TAF</b><br>{t_bold}</div></div>{inbound_html}</div>"""
     map_markers.append({"lat": info['lat'], "lon": info['lon'], "color": color, "content": shared_content, "iata": iata, "trend": trend_icon})
 
 # 8. UI RENDER
-st.markdown(f'<div class="ba-header"><div>OCC HUD v29.5 (Auto-Refresh 15m)</div><div>Live Time: {datetime.now(timezone.utc).strftime("%H:%M")} UTC</div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="ba-header"><div>OCC HUD v29.5.1 (Stable Build)</div><div>Live Time: {display_time} UTC</div></div>', unsafe_allow_html=True)
 
 m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles=("CartoDB dark_matter" if map_theme == "Dark Mode" else "CartoDB positron"), scrollWheelZoom=False)
 for mkr in map_markers:
@@ -387,7 +393,12 @@ if st.session_state.investigate_iata != "None":
     iata = st.session_state.investigate_iata
     d, info = weather_data.get(iata, {}), base_airports.get(iata, {"rwy": 0, "lat": 0, "lon": 0})
     issue_desc = (taf_alerts.get(iata, {}) or metar_alerts.get(iata, {}) or {}).get('type', "STABLE")
-    cur_xw = calculate_xwind(d.get('w_dir', 0), max(d.get('w_spd', 0), d.get('w_gst', 0)), info['rwy'])
+    
+    # Safe numbers extraction for Strategy Brief calculations
+    cur_w_dir = get_safe_num(d.get('w_dir', 0))
+    cur_w_spd = get_safe_num(d.get('w_spd', 0))
+    cur_w_gst = get_safe_num(d.get('w_gst', 0))
+    cur_xw = calculate_xwind(cur_w_dir, max(cur_w_spd, cur_w_gst), info['rwy'])
     
     preferred_alts = []
     if iata == "FLR": preferred_alts = ["PSA", "BLQ"]
@@ -399,7 +410,10 @@ if st.session_state.investigate_iata != "None":
         if g != iata and g not in metar_alerts and g not in taf_alerts:
             dist = calculate_dist(info['lat'], info['lon'], base_airports[g]['lat'], base_airports[g]['lon'])
             alt_wx = weather_data.get(g, {})
-            alt_xw = calculate_xwind(alt_wx.get('w_dir', 0), max(alt_wx.get('w_spd', 0), alt_wx.get('w_gst', 0)), base_airports[g]['rwy'])
+            alt_w_dir = get_safe_num(alt_wx.get('w_dir', 0))
+            alt_w_spd = get_safe_num(alt_wx.get('w_spd', 0))
+            alt_w_gst = get_safe_num(alt_wx.get('w_gst', 0))
+            alt_xw = calculate_xwind(alt_w_dir, max(alt_w_spd, alt_w_gst), base_airports[g]['rwy'])
             
             score = dist
             if g in preferred_alts: score -= 1000 
@@ -417,7 +431,6 @@ if st.session_state.investigate_iata != "None":
 
 # 10. HANDOVER LOG
 st.markdown('<div class="section-header">📝 Shift Handover Log</div>', unsafe_allow_html=True)
-live_time = datetime.now(timezone.utc).strftime('%H:%M')
-h_txt = f"HANDOVER {live_time}Z | SCAN WINDOW: {time_horizon}\n" + "="*50 + "\n"
+h_txt = f"HANDOVER {display_time}Z | SCAN WINDOW: {time_horizon}\n" + "="*50 + "\n"
 for i_ata, d_taf in taf_alerts.items(): h_txt += f"{i_ata}: {d_taf['type']} ({d_taf['time']})\n"
 st.text_area("Handover Report:", value=h_txt, height=200, key="handover_log")
